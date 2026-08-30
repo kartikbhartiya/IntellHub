@@ -1,0 +1,86 @@
+EmployeeID,specialization,cases_assigned,closure_rate,commendations
+1,Property Crime,13,0.45,3
+2,Homicide,45,0.8,0
+3,Property Crime,58,0.45,5
+4,Homicide,34,0.75,0
+5,Cybercrime,55,0.5,4
+6,Forest Offences,38,0.74,0
+7,Forest Offences,73,0.6,7
+8,Cybercrime,38,0.9,2
+9,Narcotics,58,0.7,7
+10,Property Crime,47,0.62,7
+11,Cybercrime,30,0.67,8
+12,Organized Crime,20,0.44,7
+13,Homicide,64,0.88,8
+14,Organized Crime,38,0.43,0
+15,Property Crime,52,0.44,3
+16,Organized Crime,22,0.45,6
+17,Narcotics,53,0.8,1
+18,Narcotics,80,0.45,8
+19,Organized Crime,58,0.4,6
+20,Organized Crime,47,0.51,0
+21,Homicide,20,0.83,1
+22,Narcotics,76,0.56,4
+23,Economic Offences,19,0.4,1
+24,Organized Crime,66,0.82,4
+25,Cybercrime,46,0.7,5
+26,Property Crime,52,0.79,4
+27,Economic Offences,57,0.69,2
+28,Cybercrime,62,0.89,2
+29,Cybercrime,30,0.79,1
+30,Property Crime,34,0.6,4
+31,Property Crime,43,0.49,4
+32,Homicide,34,0.53,6
+33,Forest Offences,25,0.76,4
+34,Narcotics,58,0.74,2
+35,Narcotics,66,0.74,8
+36,Economic Offences,40,0.74,3
+37,Narcotics,34,0.76,6
+38,Organized Crime,32,0.8,8
+39,Homicide,74,0.61,8
+40,Forest Offences,40,0.54,1
+41,Narcotics,29,0.75,1
+42,Economic Offences,58,0.64,5
+43,Cybercrime,61,0.76,7
+44,Economic Offences,69,0.49,4
+45,Cybercrime,20,0.64,8
+46,Economic Offences,12,0.71,3
+47,Homicide,24,0.79,2
+48,Forest Offences,35,0.44,3
+49,Property Crime,74,0.72,0
+50,Narcotics,32,0.77,4
+51,Cybercrime,67,0.52,7
+52,Cybercrime,45,0.84,4
+53,Forest Offences,72,0.62,0
+54,Homicide,77,0.57,8
+55,Property Crime,78,0.88,2
+56,Economic Offences,34,0.55,5
+57,Property Crime,11,0.69,7
+58,Narcotics,19,0.69,0
+59,Economic Offences,76,0.59,7
+60,Cybercrime,20,0.48,2
+61,Organized Crime,46,0.75,7
+62,Economic Offences,28,0.44,2
+63,Homicide,79,0.65,1
+64,Homicide,15,0.78,2
+65,Narcotics,54,0.6,5
+66,Narcotics,21,0.56,5
+67,Homicide,73,0.71,0
+68,Forest Offences,30,0.56,0
+69,Forest Offences,47,0.65,4
+70,Cybercrime,63,0.57,8
+71,Homicide,71,0.57,8
+72,Economic Offences,62,0.42,7
+73,Economic Offences,66,0.45,7
+74,Forest Offences,20,0.83,8
+75,Forest Offences,21,0.62,1
+76,Cybercrime,57,0.62,3
+77,Narcotics,28,0.52,4
+78,Narcotics,54,0.89,4
+79,Organized Crime,58,0.69,4
+80,Economic Offences,46,0.79,3
+81,Forest Offences,15,0.55,7
+82,Organized Crime,79,0.84,5
+83,Narcotics,19,0.47,3
+84,Cybercrime,43,0.69,5
+85,Forest Offences,69,0.85,4

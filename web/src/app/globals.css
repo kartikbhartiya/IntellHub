@@ -1,0 +1,289 @@
+@import "tailwindcss";
+
+/* ============================================================
+   KSP IntelHub — Design System  ·  LIGHT
+   "Command-grade" intelligence portal, reimagined as an
+   Apple-premium white surface: warm off-white canvas, pure-white
+   cards floating on soft layered shadows, near-black ink, and a
+   single Karnataka authority-gold accent. One accent. Lots of air.
+   ============================================================ */
+
+@theme {
+  --color-base: #f4f4f6;         /* warm off-white page canvas */
+  --color-surface: #ffffff;      /* card face */
+  --color-elevated: #ffffff;
+
+  --color-brand: #b07d16;        /* deep gold — the ONE accent (readable on white) */
+  --color-brand-soft: #e7b43c;   /* bright gold for gradients / fills */
+  --color-brand-deep: #7d570f;
+
+  --color-crimson: #dc2b25;      /* alerts / critical */
+  --color-emerald: #0a9d57;      /* resolved / safe */
+  --color-azure: #2f74c0;        /* data / info secondary */
+
+  --color-ink: #1d1d1f;          /* Apple near-black */
+  --color-muted: #6b6b73;        /* secondary text */
+  --color-faint: #97979f;        /* tertiary text */
+  --color-hairline: rgba(0, 0, 0, 0.08);
+
+  --font-display: var(--font-space), var(--font-kannada);
+  /* Kannada last: used only for codepoints the Latin faces lack. */
+  --font-sans: var(--font-jakarta), var(--font-kannada);
+
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Apple-style layered soft shadows */
+  --shadow-card: 0 1px 2px rgba(16, 18, 30, 0.05), 0 10px 30px -12px rgba(16, 18, 30, 0.14);
+  --shadow-float: 0 2px 6px rgba(16, 18, 30, 0.06), 0 24px 60px -20px rgba(16, 18, 30, 0.22);
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-base);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans), "Noto Sans", "Noto Sans Devanagari",
+    "Noto Sans Kannada", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(176, 125, 22, 0.18);
+  color: #1d1d1f;
+}
+
+/* Full Screen Mode: Completely hide top Navbar and bottom AI Console */
+[data-fullscreen="true"] #fluid-nav,
+[data-fullscreen="true"] #agent-console,
+:fullscreen #fluid-nav,
+:fullscreen #agent-console,
+:-webkit-full-screen #fluid-nav,
+:-webkit-full-screen #agent-console {
+  display: none !important;
+}
+/* Strip main container constraints so graph/map fills viewport */
+[data-fullscreen="true"] main,
+:fullscreen main,
+:-webkit-full-screen main {
+  padding: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(176, 125, 22, 0.4);
+  background-clip: content-box;
+}
+
+/* ============================================================
+   Materials
+   ============================================================ */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-float);
+}
+
+/* Card sits in a soft machined tray. */
+.bezel {
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 1.4rem;
+  padding: 5px;
+}
+.bezel-core {
+  background: var(--color-surface);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: calc(1.4rem - 5px);
+  box-shadow: var(--shadow-card);
+}
+
+.hairline-t {
+  border-top: 1px solid var(--color-hairline);
+}
+
+.glow-brand {
+  box-shadow: 0 0 0 1px rgba(176, 125, 22, 0.22), 0 10px 34px -8px rgba(231, 180, 60, 0.4);
+}
+
+.text-display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Fixed background field — soft aurora wash + faint grid.
+   Kept whisper-quiet so the white reads clean and premium.
+   ============================================================ */
+.fx-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 55% at 50% -10%, rgba(231, 180, 60, 0.10), transparent 68%),
+    radial-gradient(45% 40% at 100% 8%, rgba(47, 116, 192, 0.07), transparent 70%),
+    radial-gradient(50% 45% at 0% 100%, rgba(231, 180, 60, 0.06), transparent 72%);
+}
+.fx-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.028) 1px, transparent 1px);
+  background-size: 58px 58px;
+  mask-image: radial-gradient(ellipse 78% 68% at 50% 30%, #000 30%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 78% 68% at 50% 30%, #000 30%, transparent 78%);
+}
+/* Grain reads as noise on white — keep it effectively off. */
+.fx-grain {
+  display: none;
+}
+
+/* ============================================================
+   Motion
+   ============================================================ */
+@keyframes ksp-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 25%,
+    rgba(0, 0, 0, 0.09) 37%,
+    rgba(0, 0, 0, 0.04) 63%
+  );
+  background-size: 200% 100%;
+  animation: ksp-shimmer 1.4s var(--ease-fluid) infinite;
+}
+
+@keyframes ksp-pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { opacity: 0; }
+}
+.pulse-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: ksp-pulse-ring 2s ease-out infinite;
+}
+
+@keyframes ksp-spin-reverse {
+  to { transform: rotate(-360deg); }
+}
+.animate-spin-reverse {
+  animation: ksp-spin-reverse 1.2s linear infinite;
+}
+
+/* Bouncy entrance — a touch of spring overshoot for premium feel. */
+@keyframes ksp-rise {
+  0% { opacity: 0; transform: translateY(16px) scale(0.985); }
+  60% { opacity: 1; transform: translateY(-2px) scale(1.004); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.rise {
+  animation: ksp-rise 0.72s var(--ease-bounce) both;
+}
+
+@keyframes ksp-eq {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+.eq-bar {
+  transform-origin: bottom;
+  animation: ksp-eq 0.9s ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------- accessibility */
+
+/* Visually hidden but announced. Used for the skip link and for icon-only controls
+   whose visible label is hidden at narrow widths. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* A visible focus ring everywhere a keyboard user can land. The default was
+   removed by the reset, which left keyboard navigation invisible. */
+:where(a, button, [role="button"], input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Every page animates in on mount and many elements animate on hover. For a user
+   who has asked the OS for reduced motion, that is not decoration — it is a
+   vestibular trigger. Honour the preference rather than overriding it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A scroll container that stays scrollable but shows no bar — used by the top nav on
+   narrow screens, where a visible horizontal scrollbar under the pill would read as a
+   rendering fault rather than an affordance. Keyboard and touch scrolling are
+   unaffected. */
+.no-scrollbar {
+  scrollbar-width: none;            /* Firefox */
+  -ms-overflow-style: none;         /* legacy Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

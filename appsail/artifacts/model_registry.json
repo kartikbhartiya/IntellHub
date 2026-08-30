@@ -1,0 +1,2467 @@
+{
+  "generated_at": "2026-08-29T09:48:32+00:00",
+  "environment": {
+    "python": "3.13.4",
+    "sklearn": "1.7.2",
+    "numpy": "2.2.6",
+    "pandas": "2.3.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "git_commit": "62b63d2"
+  },
+  "data_provenance": {
+    "source": "synthetic",
+    "generator": "convert_data.py / generate_data.py (seeded, deterministic)",
+    "note": "No production KSP records were used. The corpus is CCTNS-schema-shaped synthetic data. Metrics below are honest measurements against that corpus and are NOT claims about real-world field performance.",
+    "fingerprint": {
+      "version": 2,
+      "files": 38,
+      "sha256": "8775f90c3995a3c6"
+    }
+  },
+  "governance": {
+    "principle": "KSP IntelHub does not infer guilt. It surfaces relationships and priorities in recorded data for authorised operational review.",
+    "no_output_is_evidence": "Risk scores, conviction outlooks and link predictions are decision support for allocating attention. None of it is evidence and none of it may be presented to a court as such.",
+    "human_in_the_loop": "No model output triggers an action automatically. Every threshold above orders a queue for a person to work; none authorises an action against an individual.",
+    "feedback_loop_risk": "Predictive policing systems carry a documented risk of entrenching the patterns in their own training records: enforcement concentrates where past enforcement was recorded, generating the data that justifies concentrating there. Nothing in this platform is exempt from that.",
+    "contestability": "Implemented. GET /api/subject-report/<id> discloses everything held and asserted about one person - every score with its date, each model's stated limits, and who accessed the record. POST /api/contest records a challenge, and the register is read on the serving path so a contested score reaches the officer marked. What is NOT implemented is adjudication: nothing decides whether a challenge is well-founded and no challenge suppresses a score. That is the deploying authority's decision and this platform must not make it silently.",
+    "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+    "review_by": "2027-02-28"
+  },
+  "evaluation_policy": {
+    "split": "temporal \u2014 models never see records registered after the cutoff",
+    "baselines": "every model is reported against trivial reference models",
+    "calibration": "probabilistic models are scored with Brier score and reliability bins",
+    "test_fraction": 0.2,
+    "random_state": 42
+  },
+  "dataset": {
+    "cases": {
+      "rows": 18000,
+      "cols": 24
+    },
+    "reports": {
+      "rows": 18000,
+      "cols": 3
+    },
+    "links": {
+      "rows": 28355,
+      "cols": 3
+    },
+    "suspects": {
+      "rows": 9000,
+      "cols": 4
+    },
+    "officers": {
+      "rows": 85,
+      "cols": 14
+    },
+    "offenders": {
+      "rows": 9000,
+      "cols": 13
+    },
+    "accused": {
+      "rows": 28355,
+      "cols": 6
+    },
+    "courts": {
+      "rows": 6558,
+      "cols": 6
+    },
+    "arrests": {
+      "rows": 8649,
+      "cols": 4
+    },
+    "chargesheets": {
+      "rows": 6558,
+      "cols": 3
+    },
+    "socio": {
+      "rows": 31,
+      "cols": 9
+    },
+    "_span": {
+      "first_incident": "2020-01-01",
+      "last_incident": "2026-12-28",
+      "crime_types": 10,
+      "districts": 31
+    }
+  },
+  "warnings": [
+    "[narrative_classifier] token 'any' appears only in class 'Cyber Fraud (Jamtara style)' (269 occurrences)",
+    "[narrative_classifier] token 'beneficiary' appears only in class 'Cyber Fraud (Jamtara style)' (247 occurrences)",
+    "[narrative_classifier] token 'branch' appears only in class 'Cyber Fraud (Jamtara style)' (247 occurrences)",
+    "[narrative_classifier] token 'channel' appears only in class 'Cyber Fraud (Jamtara style)' (228 occurrences)",
+    "[narrative_classifier] token 'concerned' appears only in class 'Cyber Fraud (Jamtara style)' (253 occurrences)",
+    "[crime_forecast] is statistically indistinguishable from the moving average (4w) baseline (95% CI on the MAE difference spans zero) - this series carries little forecastable signal beyond its local level"
+  ],
+  "models": {
+    "narrative_classifier": {
+      "name": "narrative_classifier",
+      "algorithm": "TF-IDF + Logistic Regression (grid-searched on the training window)",
+      "task": "multi-class text classification",
+      "target": "crime_type",
+      "features": [
+        "FIR narrative text (word 1-2 grams, sublinear TF-IDF)"
+      ],
+      "split": {
+        "strategy": "temporal (train strictly before cutoff)",
+        "cutoff": "2025-08-14",
+        "n_train": 14400,
+        "n_test": 3600,
+        "train_span": {
+          "from": "2020-01-01",
+          "to": "2025-08-14"
+        },
+        "test_span": {
+          "from": "2025-08-15",
+          "to": "2026-12-28"
+        }
+      },
+      "metrics": {
+        "accuracy": 0.8083,
+        "balanced_accuracy": 0.8084,
+        "f1_macro": 0.8084,
+        "f1_weighted": 0.8083,
+        "mcc": 0.7871,
+        "n_test": 3600,
+        "labels": [
+          "Assault",
+          "Chain Snatching",
+          "Cyber Fraud (Jamtara style)",
+          "Extortion",
+          "Homicide",
+          "House Break-in (Night)",
+          "Murder",
+          "Narcotics Distribution",
+          "Sandalwood Smuggling",
+          "Vehicle Theft"
+        ],
+        "confusion_matrix": [
+          [
+            305,
+            1,
+            0,
+            1,
+            30,
+            0,
+            39,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            286,
+            1,
+            1,
+            0,
+            38,
+            2,
+            0,
+            1,
+            36
+          ],
+          [
+            0,
+            0,
+            355,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            3,
+            0,
+            288,
+            2,
+            1,
+            1,
+            38,
+            36,
+            2
+          ],
+          [
+            38,
+            0,
+            0,
+            2,
+            265,
+            0,
+            32,
+            1,
+            2,
+            0
+          ],
+          [
+            3,
+            24,
+            1,
+            2,
+            0,
+            295,
+            1,
+            1,
+            3,
+            35
+          ],
+          [
+            46,
+            0,
+            1,
+            0,
+            30,
+            2,
+            263,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            2,
+            1,
+            25,
+            1,
+            0,
+            5,
+            297,
+            40,
+            0
+          ],
+          [
+            2,
+            1,
+            0,
+            32,
+            3,
+            0,
+            4,
+            42,
+            277,
+            0
+          ],
+          [
+            0,
+            28,
+            0,
+            0,
+            1,
+            41,
+            1,
+            1,
+            0,
+            279
+          ]
+        ],
+        "per_class": [
+          {
+            "label": "Assault",
+            "precision": 0.7702,
+            "recall": 0.8112,
+            "f1": 0.7902,
+            "support": 376
+          },
+          {
+            "label": "Chain Snatching",
+            "precision": 0.829,
+            "recall": 0.7814,
+            "f1": 0.8045,
+            "support": 366
+          },
+          {
+            "label": "Cyber Fraud (Jamtara style)",
+            "precision": 0.9889,
+            "recall": 1.0,
+            "f1": 0.9944,
+            "support": 355
+          },
+          {
+            "label": "Extortion",
+            "precision": 0.8205,
+            "recall": 0.7742,
+            "f1": 0.7967,
+            "support": 372
+          },
+          {
+            "label": "Homicide",
+            "precision": 0.7982,
+            "recall": 0.7794,
+            "f1": 0.7887,
+            "support": 340
+          },
+          {
+            "label": "House Break-in (Night)",
+            "precision": 0.7825,
+            "recall": 0.8082,
+            "f1": 0.7951,
+            "support": 365
+          },
+          {
+            "label": "Murder",
+            "precision": 0.7557,
+            "recall": 0.7668,
+            "f1": 0.7612,
+            "support": 343
+          },
+          {
+            "label": "Narcotics Distribution",
+            "precision": 0.7816,
+            "recall": 0.8005,
+            "f1": 0.7909,
+            "support": 371
+          },
+          {
+            "label": "Sandalwood Smuggling",
+            "precision": 0.7716,
+            "recall": 0.7673,
+            "f1": 0.7694,
+            "support": 361
+          },
+          {
+            "label": "Vehicle Theft",
+            "precision": 0.7904,
+            "recall": 0.7949,
+            "f1": 0.7926,
+            "support": 351
+          }
+        ]
+      },
+      "baselines": [
+        {
+          "strategy": "majority class",
+          "predicts": "Narcotics Distribution",
+          "accuracy": 0.1031
+        },
+        {
+          "strategy": "stratified random",
+          "accuracy": 0.0994
+        }
+      ],
+      "notes": [
+        "Trained and scored on a temporal split \u2014 the model never sees an FIR registered after the cutoff.",
+        "The structured [METADATA:] tag and legal-section lines are stripped before vectorisation.",
+        "Leakage probe flagged 5 token(s) that occur in only one class; treat their contribution with suspicion.",
+        "Largest residual confusions: Murder read as Assault (13% of Murder cases); Vehicle Theft read as House Break-in (Night) (12% of Vehicle Theft cases); Sandalwood Smuggling read as Narcotics Distribution (12% of Sandalwood Smuggling cases)."
+      ],
+      "artifact": "narrative_classifier.joblib",
+      "best_params": {
+        "clf__C": "1.0",
+        "clf__class_weight": "None",
+        "tfidf__max_features": "20000",
+        "tfidf__min_df": "2",
+        "tfidf__ngram_range": "(1, 2)"
+      },
+      "cv_best_f1_macro": 0.8001,
+      "alternatives": [
+        {
+          "model": "Linear SVM (calibrated)",
+          "accuracy": 0.8081,
+          "f1_macro": 0.8081
+        },
+        {
+          "model": "Complement Naive Bayes",
+          "accuracy": 0.7822,
+          "f1_macro": 0.7818
+        }
+      ],
+      "class_keywords": {
+        "Assault": [
+          {
+            "token": "injuries on",
+            "weight": 4.469
+          },
+          {
+            "token": "complainant sustained",
+            "weight": 4.297
+          },
+          {
+            "token": "on the",
+            "weight": 3.186
+          },
+          {
+            "token": "was used",
+            "weight": 3.129
+          },
+          {
+            "token": "body the",
+            "weight": 2.564
+          },
+          {
+            "token": "pushed",
+            "weight": 2.469
+          },
+          {
+            "token": "was pushed",
+            "weight": 2.469
+          },
+          {
+            "token": "scuffle",
+            "weight": 2.469
+          },
+          {
+            "token": "down",
+            "weight": 2.469
+          },
+          {
+            "token": "the scuffle",
+            "weight": 2.469
+          }
+        ],
+        "Chain Snatching": [
+          {
+            "token": "article",
+            "weight": 2.937
+          },
+          {
+            "token": "the article",
+            "weight": 2.937
+          },
+          {
+            "token": "complainant was",
+            "weight": 2.34
+          },
+          {
+            "token": "worn",
+            "weight": 2.26
+          },
+          {
+            "token": "pulled",
+            "weight": 2.241
+          },
+          {
+            "token": "was pulled",
+            "weight": 2.241
+          },
+          {
+            "token": "away",
+            "weight": 2.178
+          },
+          {
+            "token": "property",
+            "weight": 2.057
+          },
+          {
+            "token": "act",
+            "weight": 2.015
+          },
+          {
+            "token": "away the",
+            "weight": 1.997
+          }
+        ],
+        "Cyber Fraud (Jamtara style)": [
+          {
+            "token": "account",
+            "weight": 2.76
+          },
+          {
+            "token": "the amount",
+            "weight": 2.381
+          },
+          {
+            "token": "amount",
+            "weight": 2.378
+          },
+          {
+            "token": "bank",
+            "weight": 2.315
+          },
+          {
+            "token": "details",
+            "weight": 2.104
+          },
+          {
+            "token": "account details",
+            "weight": 2.104
+          },
+          {
+            "token": "sent",
+            "weight": 1.88
+          },
+          {
+            "token": "amount was",
+            "weight": 1.843
+          },
+          {
+            "token": "tranches",
+            "weight": 1.813
+          },
+          {
+            "token": "in several",
+            "weight": 1.813
+          }
+        ],
+        "Extortion": [
+          {
+            "token": "is under",
+            "weight": 2.238
+          },
+          {
+            "token": "under",
+            "weight": 2.023
+          },
+          {
+            "token": "not",
+            "weight": 2.009
+          },
+          {
+            "token": "threatening calls",
+            "weight": 1.964
+          },
+          {
+            "token": "were received",
+            "weight": 1.964
+          },
+          {
+            "token": "mobile",
+            "weight": 1.964
+          },
+          {
+            "token": "mobile number",
+            "weight": 1.964
+          },
+          {
+            "token": "received on",
+            "weight": 1.964
+          },
+          {
+            "token": "threatening",
+            "weight": 1.964
+          },
+          {
+            "token": "calls were",
+            "weight": 1.964
+          }
+        ],
+        "Homicide": [
+          {
+            "token": "death",
+            "weight": 3.075
+          },
+          {
+            "token": "the injuries",
+            "weight": 2.497
+          },
+          {
+            "token": "treatment",
+            "weight": 2.374
+          },
+          {
+            "token": "the formalities",
+            "weight": 2.36
+          },
+          {
+            "token": "body has",
+            "weight": 2.36
+          },
+          {
+            "token": "relatives after",
+            "weight": 2.36
+          },
+          {
+            "token": "relatives",
+            "weight": 2.36
+          },
+          {
+            "token": "course",
+            "weight": 2.324
+          },
+          {
+            "token": "course of",
+            "weight": 2.324
+          },
+          {
+            "token": "the relatives",
+            "weight": 2.308
+          }
+        ],
+        "House Break-in (Night)": [
+          {
+            "token": "the premises",
+            "weight": 3.084
+          },
+          {
+            "token": "premises",
+            "weight": 2.706
+          },
+          {
+            "token": "after",
+            "weight": 2.081
+          },
+          {
+            "token": "property",
+            "weight": 2.023
+          },
+          {
+            "token": "articles",
+            "weight": 2.015
+          },
+          {
+            "token": "been effected",
+            "weight": 1.87
+          },
+          {
+            "token": "after breaking",
+            "weight": 1.87
+          },
+          {
+            "token": "entry appears",
+            "weight": 1.87
+          },
+          {
+            "token": "effected",
+            "weight": 1.87
+          },
+          {
+            "token": "breaking",
+            "weight": 1.87
+          }
+        ],
+        "Murder": [
+          {
+            "token": "mortem",
+            "weight": 2.71
+          },
+          {
+            "token": "post mortem",
+            "weight": 2.71
+          },
+          {
+            "token": "post",
+            "weight": 2.71
+          },
+          {
+            "token": "conducted over",
+            "weight": 2.356
+          },
+          {
+            "token": "inquest was",
+            "weight": 2.356
+          },
+          {
+            "token": "over the",
+            "weight": 2.356
+          },
+          {
+            "token": "an inquest",
+            "weight": 2.356
+          },
+          {
+            "token": "inquest",
+            "weight": 2.356
+          },
+          {
+            "token": "body in",
+            "weight": 2.356
+          },
+          {
+            "token": "hospital",
+            "weight": 2.286
+          }
+        ],
+        "Narcotics Distribution": [
+          {
+            "token": "substance",
+            "weight": 2.91
+          },
+          {
+            "token": "seized",
+            "weight": 2.827
+          },
+          {
+            "token": "material",
+            "weight": 2.827
+          },
+          {
+            "token": "is under",
+            "weight": 2.264
+          },
+          {
+            "token": "material as",
+            "weight": 1.782
+          },
+          {
+            "token": "sample was",
+            "weight": 1.782
+          },
+          {
+            "token": "sample",
+            "weight": 1.782
+          },
+          {
+            "token": "drawn",
+            "weight": 1.782
+          },
+          {
+            "token": "procedure",
+            "weight": 1.782
+          },
+          {
+            "token": "drawn from",
+            "weight": 1.782
+          }
+        ],
+        "Sandalwood Smuggling": [
+          {
+            "token": "timber",
+            "weight": 3.156
+          },
+          {
+            "token": "forest",
+            "weight": 3.086
+          },
+          {
+            "token": "the forest",
+            "weight": 3.076
+          },
+          {
+            "token": "the consignment",
+            "weight": 2.318
+          },
+          {
+            "token": "consignment",
+            "weight": 2.269
+          },
+          {
+            "token": "is under",
+            "weight": 2.235
+          },
+          {
+            "token": "department",
+            "weight": 1.931
+          },
+          {
+            "token": "the timber",
+            "weight": 1.931
+          },
+          {
+            "token": "timber recovered",
+            "weight": 1.931
+          },
+          {
+            "token": "recovered has",
+            "weight": 1.931
+          }
+        ],
+        "Vehicle Theft": [
+          {
+            "token": "parked",
+            "weight": 3.516
+          },
+          {
+            "token": "missing",
+            "weight": 2.867
+          },
+          {
+            "token": "vehicle",
+            "weight": 2.681
+          },
+          {
+            "token": "the missing",
+            "weight": 2.206
+          },
+          {
+            "token": "furnished",
+            "weight": 2.034
+          },
+          {
+            "token": "been furnished",
+            "weight": 2.034
+          },
+          {
+            "token": "particulars",
+            "weight": 1.861
+          },
+          {
+            "token": "vehicle have",
+            "weight": 1.861
+          },
+          {
+            "token": "missing vehicle",
+            "weight": 1.861
+          },
+          {
+            "token": "registration particulars",
+            "weight": 1.861
+          }
+        ]
+      },
+      "leakage_probe": {
+        "suspect_tokens": [
+          {
+            "token": "any",
+            "class": "Cyber Fraud (Jamtara style)",
+            "occurrences": 269,
+            "purity": 1.0
+          },
+          {
+            "token": "beneficiary",
+            "class": "Cyber Fraud (Jamtara style)",
+            "occurrences": 247,
+            "purity": 1.0
+          },
+          {
+            "token": "branch",
+            "class": "Cyber Fraud (Jamtara style)",
+            "occurrences": 247,
+            "purity": 1.0
+          },
+          {
+            "token": "channel",
+            "class": "Cyber Fraud (Jamtara style)",
+            "occurrences": 228,
+            "purity": 1.0
+          },
+          {
+            "token": "concerned",
+            "class": "Cyber Fraud (Jamtara style)",
+            "occurrences": 253,
+            "purity": 1.0
+          }
+        ],
+        "n_flagged": 5
+      },
+      "card": {
+        "intended_use": "Triage: suggest a crime head for an FIR whose narrative has been filed without one, so a human can confirm it.",
+        "out_of_scope": "Re-classifying a case already assigned a head by an officer, and any use as the sole basis for a filing decision. The model reads language, not evidence.",
+        "decision_threshold": "No automatic action. A suggestion below 0.60 predicted probability should be shown as 'uncertain' rather than as a recommendation.",
+        "monitoring": "Watch the share of predictions falling below 0.60 and the confusion between Murder / Homicide / Assault; a shift there usually means filing practice changed, not that the model did.",
+        "retrain_cadence": "On any change to the narrative corpus, and at least every 6 months.",
+        "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+        "review_by": "2027-02-28"
+      },
+      "headline": "accuracy 0.808 (+0.705 vs majority class)"
+    },
+    "recidivism_risk": {
+      "name": "recidivism_risk",
+      "algorithm": "Logistic Regression with Platt calibration",
+      "task": "binary classification (probability of re-offence)",
+      "target": "new case within 365 days of the observation date",
+      "features": [
+        "n_prior_cases",
+        "days_since_last",
+        "days_since_first",
+        "career_length_days",
+        "offence_rate_per_year",
+        "n_districts",
+        "n_crime_types",
+        "mean_severity",
+        "max_severity",
+        "n_co_offenders",
+        "violent_share",
+        "property_share",
+        "n_prior_arrests",
+        "age",
+        "recent_cases_180d"
+      ],
+      "split": {
+        "strategy": "two disjoint observation panels (no shared outcome window)",
+        "train_observed_at": "2024-12-28",
+        "test_observed_at": "2025-12-28",
+        "n_train": 5921,
+        "n_test": 6384,
+        "train_positive_rate": 0.3613,
+        "test_positive_rate": 0.3524
+      },
+      "metrics": {
+        "accuracy": 0.7155,
+        "balanced_accuracy": 0.6405,
+        "f1_macro": 0.646,
+        "f1_weighted": 0.6923,
+        "mcc": 0.333,
+        "n_test": 6384,
+        "labels": [
+          "0",
+          "1"
+        ],
+        "confusion_matrix": [
+          [
+            3699,
+            435
+          ],
+          [
+            1381,
+            869
+          ]
+        ],
+        "per_class": [
+          {
+            "label": "0",
+            "precision": 0.7281,
+            "recall": 0.8948,
+            "f1": 0.8029,
+            "support": 4134
+          },
+          {
+            "label": "1",
+            "precision": 0.6664,
+            "recall": 0.3862,
+            "f1": 0.489,
+            "support": 2250
+          }
+        ],
+        "roc_auc": 0.7086,
+        "pr_auc": 0.6158,
+        "positive_rate": 0.3524,
+        "brier": 0.1952,
+        "calibration": {
+          "bins": [
+            {
+              "bin": "0.1-0.2",
+              "predicted": 0.1903,
+              "observed": 0.181,
+              "n": 420
+            },
+            {
+              "bin": "0.2-0.3",
+              "predicted": 0.2437,
+              "observed": 0.2149,
+              "n": 2275
+            },
+            {
+              "bin": "0.3-0.4",
+              "predicted": 0.3468,
+              "observed": 0.3136,
+              "n": 1518
+            },
+            {
+              "bin": "0.4-0.5",
+              "predicted": 0.4445,
+              "observed": 0.3922,
+              "n": 867
+            },
+            {
+              "bin": "0.5-0.6",
+              "predicted": 0.5476,
+              "observed": 0.5244,
+              "n": 471
+            },
+            {
+              "bin": "0.6-0.7",
+              "predicted": 0.6461,
+              "observed": 0.6325,
+              "n": 302
+            },
+            {
+              "bin": "0.7-0.8",
+              "predicted": 0.7488,
+              "observed": 0.715,
+              "n": 207
+            },
+            {
+              "bin": "0.8-0.9",
+              "predicted": 0.8449,
+              "observed": 0.8046,
+              "n": 174
+            },
+            {
+              "bin": "0.9-1.0",
+              "predicted": 0.9486,
+              "observed": 0.9533,
+              "n": 150
+            }
+          ],
+          "expected_calibration_error": 0.0305
+        },
+        "lift_table": [
+          {
+            "decile": "top 20%",
+            "n": 1276,
+            "hit_rate": 0.6716,
+            "lift": 1.91,
+            "cumulative_capture": 0.3809
+          },
+          {
+            "decile": "top 40%",
+            "n": 1277,
+            "hit_rate": 0.3782,
+            "lift": 1.07,
+            "cumulative_capture": 0.5956
+          },
+          {
+            "decile": "top 60%",
+            "n": 1277,
+            "hit_rate": 0.296,
+            "lift": 0.84,
+            "cumulative_capture": 0.7636
+          },
+          {
+            "decile": "top 80%",
+            "n": 1277,
+            "hit_rate": 0.2373,
+            "lift": 0.67,
+            "cumulative_capture": 0.8982
+          },
+          {
+            "decile": "top 100%",
+            "n": 1277,
+            "hit_rate": 0.1793,
+            "lift": 0.51,
+            "cumulative_capture": 1.0
+          }
+        ]
+      },
+      "baselines": [
+        {
+          "strategy": "base rate",
+          "base_rate": 0.3613,
+          "brier": 0.2283,
+          "roc_auc": 0.5
+        },
+        {
+          "strategy": "majority class",
+          "predicts": "0",
+          "accuracy": 0.6476
+        },
+        {
+          "strategy": "legacy rubric (as shipped \u2014 reads snapshot columns)",
+          "roc_auc": 0.7722,
+          "note": "the previous 0-100 scoring rubric, including its risk_level, active_warrant and gang terms"
+        },
+        {
+          "strategy": "legacy rubric (restricted to dated information)",
+          "roc_auc": 0.7081,
+          "note": "the same rubric with the undated snapshot terms removed \u2014 the like-for-like comparison against the model"
+        }
+      ],
+      "notes": [
+        "Target: named in a new case within 365 days after the observation date.",
+        "Training panel observed at 2024-12-28, test panel at 2025-12-28 \u2014 the two outcome windows do not overlap.",
+        "Registry columns past_fir_count / past_arrests are excluded: they are undated snapshots that may already count the offences being predicted. Prior counts are recomputed from the dated case and arrest tables.",
+        "Model selected by cross-validated ROC-AUC on the training panel (Logistic Regression), then calibrated with Platt scaling.",
+        "Against the like-for-like comparison \u2014 the legacy rubric restricted to the same dated information \u2014 the model improves on it: ROC-AUC 0.709 vs 0.708.",
+        "The rubric as previously shipped scores higher (0.772), but only because it reads risk_level, active_warrant and gang affiliation \u2014 undated current-state columns that reflect the offender's whole record, including the very window being predicted. That advantage is leakage, not skill, which is why those columns are excluded here and why the ablation below matters."
+      ],
+      "artifact": "recidivism_risk.joblib",
+      "cv_roc_auc": {
+        "Logistic Regression": 0.7,
+        "Gradient Boosting": 0.6852
+      },
+      "selected_model": "Logistic Regression",
+      "permutation_importance": [
+        {
+          "feature": "n_prior_cases",
+          "importance": 0.0428,
+          "std": 0.0038
+        },
+        {
+          "feature": "n_districts",
+          "importance": 0.0216,
+          "std": 0.0033
+        },
+        {
+          "feature": "max_severity",
+          "importance": 0.0158,
+          "std": 0.0027
+        },
+        {
+          "feature": "mean_severity",
+          "importance": 0.0061,
+          "std": 0.0024
+        },
+        {
+          "feature": "offence_rate_per_year",
+          "importance": 0.0028,
+          "std": 0.0015
+        },
+        {
+          "feature": "recent_cases_180d",
+          "importance": 0.0025,
+          "std": 0.0009
+        },
+        {
+          "feature": "n_co_offenders",
+          "importance": 0.0023,
+          "std": 0.0015
+        },
+        {
+          "feature": "career_length_days",
+          "importance": 0.0017,
+          "std": 0.0005
+        },
+        {
+          "feature": "violent_share",
+          "importance": 0.0014,
+          "std": 0.0005
+        },
+        {
+          "feature": "n_prior_arrests",
+          "importance": 0.0012,
+          "std": 0.0007
+        },
+        {
+          "feature": "days_since_first",
+          "importance": 0.0011,
+          "std": 0.0009
+        },
+        {
+          "feature": "n_crime_types",
+          "importance": 0.0005,
+          "std": 0.0005
+        },
+        {
+          "feature": "days_since_last",
+          "importance": 0.0,
+          "std": 0.0
+        },
+        {
+          "feature": "property_share",
+          "importance": -0.0,
+          "std": 0.0008
+        },
+        {
+          "feature": "age",
+          "importance": -0.0001,
+          "std": 0.0001
+        }
+      ],
+      "snapshot_flag_ablation": {
+        "with_snapshot_flags_roc_auc": 0.6967,
+        "headline_roc_auc": 0.7086,
+        "interpretation": "Snapshot registry flags carry no as-of date, so any lift they add cannot be distinguished from reading the outcome. The headline model excludes them."
+      },
+      "card": {
+        "intended_use": "Rank registered offenders for allocation of finite supervisory attention.",
+        "out_of_scope": "Bail, sentencing, parole, or any custodial decision. Also any use against a person not already on the register. The index is a ranking instrument, not a statement about a person's character or intent.",
+        "decision_threshold": "Percentile bands: top 5% Extreme, next 15% High, next 30% Elevated. Bands allocate review effort; none of them authorises an action against an individual.",
+        "monitoring": "Band composition over time, calibration drift (Brier), and whether the learned model still beats the dated rubric \u2014 it currently only ties it.",
+        "retrain_cadence": "Quarterly, with a fresh observation panel each time.",
+        "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+        "review_by": "2027-02-28"
+      },
+      "headline": "ROC-AUC 0.709, PR-AUC 0.616"
+    },
+    "conviction_outcome": {
+      "name": "conviction_outcome",
+      "algorithm": "Gradient Boosting with Platt calibration",
+      "task": "binary classification (trial outcome)",
+      "target": "conviction (vs acquittal) for a named accused",
+      "features": [
+        "age",
+        "gender",
+        "n_prior_cases",
+        "n_prior_arrests",
+        "days_since_first_case",
+        "n_co_accused",
+        "severity_score",
+        "fatalities",
+        "injured",
+        "witnesses",
+        "n_prior_districts",
+        "arrest_delay_days",
+        "chargesheet_delay_days",
+        "crime_type",
+        "district"
+      ],
+      "split": {
+        "strategy": "grouped by offender + temporal",
+        "cutoff": "2024-02-19",
+        "n_train": 8269,
+        "n_test": 1000,
+        "train_span": {
+          "from": "2020-01-01",
+          "to": "2026-07-27"
+        },
+        "test_span": {
+          "from": "2024-02-19",
+          "to": "2026-07-22"
+        },
+        "train_positive_rate": 0.3871,
+        "test_positive_rate": 0.451
+      },
+      "metrics": {
+        "accuracy": 0.63,
+        "balanced_accuracy": 0.6102,
+        "f1_macro": 0.6027,
+        "f1_weighted": 0.6129,
+        "mcc": 0.2424,
+        "n_test": 1000,
+        "labels": [
+          "0",
+          "1"
+        ],
+        "confusion_matrix": [
+          [
+            446,
+            103
+          ],
+          [
+            267,
+            184
+          ]
+        ],
+        "per_class": [
+          {
+            "label": "0",
+            "precision": 0.6255,
+            "recall": 0.8124,
+            "f1": 0.7068,
+            "support": 549
+          },
+          {
+            "label": "1",
+            "precision": 0.6411,
+            "recall": 0.408,
+            "f1": 0.4986,
+            "support": 451
+          }
+        ],
+        "roc_auc": 0.675,
+        "pr_auc": 0.6006,
+        "positive_rate": 0.451,
+        "brier": 0.2285,
+        "calibration": {
+          "bins": [
+            {
+              "bin": "0.0-0.1",
+              "predicted": 0.0564,
+              "observed": 0.0811,
+              "n": 37
+            },
+            {
+              "bin": "0.1-0.2",
+              "predicted": 0.1573,
+              "observed": 0.15,
+              "n": 100
+            },
+            {
+              "bin": "0.2-0.3",
+              "predicted": 0.2544,
+              "observed": 0.3607,
+              "n": 183
+            },
+            {
+              "bin": "0.3-0.4",
+              "predicted": 0.3493,
+              "observed": 0.4888,
+              "n": 223
+            },
+            {
+              "bin": "0.4-0.5",
+              "predicted": 0.4505,
+              "observed": 0.4353,
+              "n": 170
+            },
+            {
+              "bin": "0.5-0.6",
+              "predicted": 0.5438,
+              "observed": 0.6012,
+              "n": 168
+            },
+            {
+              "bin": "0.6-0.7",
+              "predicted": 0.6386,
+              "observed": 0.6989,
+              "n": 93
+            },
+            {
+              "bin": "0.7-0.8",
+              "predicted": 0.7375,
+              "observed": 0.6957,
+              "n": 23
+            },
+            {
+              "bin": "0.8-0.9",
+              "predicted": 0.8112,
+              "observed": 0.6667,
+              "n": 3
+            }
+          ],
+          "expected_calibration_error": 0.0714
+        },
+        "lift_table": [
+          {
+            "decile": "top 20%",
+            "n": 200,
+            "hit_rate": 0.685,
+            "lift": 1.52,
+            "cumulative_capture": 0.3038
+          },
+          {
+            "decile": "top 40%",
+            "n": 200,
+            "hit_rate": 0.48,
+            "lift": 1.06,
+            "cumulative_capture": 0.5166
+          },
+          {
+            "decile": "top 60%",
+            "n": 200,
+            "hit_rate": 0.485,
+            "lift": 1.08,
+            "cumulative_capture": 0.7317
+          },
+          {
+            "decile": "top 80%",
+            "n": 200,
+            "hit_rate": 0.395,
+            "lift": 0.88,
+            "cumulative_capture": 0.9069
+          },
+          {
+            "decile": "top 100%",
+            "n": 200,
+            "hit_rate": 0.21,
+            "lift": 0.47,
+            "cumulative_capture": 1.0
+          }
+        ]
+      },
+      "baselines": [
+        {
+          "strategy": "base rate",
+          "base_rate": 0.3871,
+          "brier": 0.2517,
+          "roc_auc": 0.5
+        },
+        {
+          "strategy": "majority class",
+          "predicts": "0",
+          "accuracy": 0.549
+        }
+      ],
+      "notes": [
+        "Split groups by person and by time: no individual appears on both sides, and the test half is later.",
+        "Registry flags (rowdy sheeter / history sheet / active warrant) are excluded: they are undated snapshots that may post-date the verdict being predicted.",
+        "Prior case and arrest counts are recomputed per row from records strictly before that case's own date.",
+        "Test-window conviction rate is 45.1% \u2014 the number any accuracy figure has to be read against.",
+        "Outcome predictions are decision support for case preparation. They are not evidence and must never be presented to a court as such."
+      ],
+      "artifact": "conviction_outcome.joblib",
+      "cv_roc_auc": {
+        "Logistic Regression": 0.6885,
+        "Gradient Boosting": 0.7102
+      },
+      "selected_model": "Gradient Boosting",
+      "permutation_importance": [
+        {
+          "feature": "arrest_delay_days",
+          "importance": 0.0881
+        },
+        {
+          "feature": "witnesses",
+          "importance": 0.0337
+        },
+        {
+          "feature": "chargesheet_delay_days",
+          "importance": 0.0312
+        },
+        {
+          "feature": "severity_score",
+          "importance": 0.028
+        },
+        {
+          "feature": "district",
+          "importance": 0.0128
+        },
+        {
+          "feature": "n_co_accused",
+          "importance": 0.0117
+        },
+        {
+          "feature": "days_since_first_case",
+          "importance": 0.0027
+        },
+        {
+          "feature": "crime_type",
+          "importance": 0.0024
+        },
+        {
+          "feature": "age",
+          "importance": 0.0023
+        },
+        {
+          "feature": "injured",
+          "importance": 0.0018
+        },
+        {
+          "feature": "n_prior_districts",
+          "importance": 0.0003
+        },
+        {
+          "feature": "fatalities",
+          "importance": -0.0
+        },
+        {
+          "feature": "n_prior_cases",
+          "importance": -0.0
+        },
+        {
+          "feature": "gender",
+          "importance": -0.0001
+        },
+        {
+          "feature": "n_prior_arrests",
+          "importance": -0.0002
+        }
+      ],
+      "fairness_slices": [
+        {
+          "slice": "age = <25",
+          "n": 182,
+          "positive_rate": 0.4231,
+          "selection_rate": 0.2637,
+          "accuracy": 0.6099,
+          "roc_auc": 0.6317
+        },
+        {
+          "slice": "age = 25-34",
+          "n": 245,
+          "positive_rate": 0.449,
+          "selection_rate": 0.2163,
+          "accuracy": 0.6122,
+          "roc_auc": 0.6836
+        },
+        {
+          "slice": "age = 35-49",
+          "n": 383,
+          "positive_rate": 0.4674,
+          "selection_rate": 0.3185,
+          "accuracy": 0.6423,
+          "roc_auc": 0.6839
+        },
+        {
+          "slice": "age = 50+",
+          "n": 190,
+          "positive_rate": 0.4474,
+          "selection_rate": 0.3368,
+          "accuracy": 0.6474,
+          "roc_auc": 0.6856
+        },
+        {
+          "slice": "gender = Female",
+          "n": 95,
+          "positive_rate": 0.4737,
+          "selection_rate": 0.3368,
+          "accuracy": 0.6526,
+          "roc_auc": 0.6893
+        },
+        {
+          "slice": "gender = Male",
+          "n": 905,
+          "positive_rate": 0.4486,
+          "selection_rate": 0.2818,
+          "accuracy": 0.6276,
+          "roc_auc": 0.6735
+        }
+      ],
+      "card": {
+        "intended_use": "Flag prosecutions that look evidentially weak early enough for the investigating officer to strengthen the file.",
+        "out_of_scope": "Presentation to a court in any form, advising a plea, or any use suggesting a defendant is likely guilty. It predicts case-file strength, not culpability.",
+        "decision_threshold": "No automatic action. Intended as a queue for case review, worked from the lowest predicted probability up.",
+        "monitoring": "Fairness slices by age band and gender must be re-checked every run; a widening gap is a stop condition, not a note.",
+        "retrain_cadence": "Quarterly.",
+        "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+        "review_by": "2027-02-28"
+      },
+      "headline": "ROC-AUC 0.675, PR-AUC 0.601"
+    },
+    "hotspot_clusters": {
+      "name": "hotspot_clusters",
+      "algorithm": "DBSCAN with haversine metric, parameters selected by silhouette sweep",
+      "task": "unsupervised spatial clustering",
+      "target": "none \u2014 structure discovery, not prediction",
+      "features": [
+        "incident latitude",
+        "incident longitude"
+      ],
+      "split": {
+        "strategy": "not applicable \u2014 unsupervised",
+        "n_train": 18000
+      },
+      "metrics": {
+        "n_clusters": 60,
+        "n_clustered": 14098,
+        "n_noise": 3902,
+        "noise_fraction": 0.2168,
+        "silhouette": 0.6381,
+        "davies_bouldin": 0.3622,
+        "eps_km": 4.0,
+        "min_samples": 15,
+        "median_radius_km": 6.34,
+        "median_zone_radius_km": 8.51,
+        "patrollable_zones": 23
+      },
+      "baselines": [],
+      "notes": [
+        "eps and min_samples chosen from a 32-point sweep scored on silhouette and noise fraction; the full sweep is included below so the choice can be checked. Selected: eps=4.0 km, min_samples=15.",
+        "Cluster count is constrained to 4-60 zones. Silhouette on its own rewards hundreds of four-incident micro-clusters \u2014 a perfect score and an unusable patrol plan.",
+        "Silhouette and Davies-Bouldin are internal validity measures. There is no ground-truth hotspot label, so these describe cluster structure \u2014 they are not accuracy and should not be read as such.",
+        "23 of 25 zones fall within a 15.0 km radius, the rough limit of a patrollable area.",
+        "Points marked as noise are genuinely dispersed incidents, not failures \u2014 forcing every incident into a zone would invent hotspots that do not exist."
+      ],
+      "artifact": "hotspot_clusters.joblib",
+      "parameter_sweep": [
+        {
+          "n_clusters": 222,
+          "n_clustered": 11304,
+          "n_noise": 6696,
+          "noise_fraction": 0.372,
+          "silhouette": 0.2182,
+          "davies_bouldin": 0.6146,
+          "eps_km": 1.0,
+          "min_samples": 4,
+          "median_radius_km": 0.99
+        },
+        {
+          "n_clusters": 135,
+          "n_clustered": 10060,
+          "n_noise": 7940,
+          "noise_fraction": 0.4411,
+          "silhouette": 0.4528,
+          "davies_bouldin": 0.6082,
+          "eps_km": 1.0,
+          "min_samples": 6,
+          "median_radius_km": 1.43
+        },
+        {
+          "n_clusters": 86,
+          "n_clustered": 7892,
+          "n_noise": 10108,
+          "noise_fraction": 0.5616,
+          "silhouette": 0.6202,
+          "davies_bouldin": 0.521,
+          "eps_km": 1.0,
+          "min_samples": 10,
+          "median_radius_km": 1.7
+        },
+        {
+          "n_clusters": 54,
+          "n_clustered": 5544,
+          "n_noise": 12456,
+          "noise_fraction": 0.692,
+          "silhouette": 0.591,
+          "davies_bouldin": 0.4346,
+          "eps_km": 1.0,
+          "min_samples": 15,
+          "median_radius_km": 1.41
+        },
+        {
+          "n_clusters": 178,
+          "n_clustered": 13864,
+          "n_noise": 4136,
+          "noise_fraction": 0.2298,
+          "silhouette": 0.4117,
+          "davies_bouldin": 0.4606,
+          "eps_km": 2.0,
+          "min_samples": 4,
+          "median_radius_km": 2.07
+        },
+        {
+          "n_clusters": 91,
+          "n_clustered": 13129,
+          "n_noise": 4871,
+          "noise_fraction": 0.2706,
+          "silhouette": 0.6186,
+          "davies_bouldin": 0.376,
+          "eps_km": 2.0,
+          "min_samples": 6,
+          "median_radius_km": 4.88
+        },
+        {
+          "n_clusters": 73,
+          "n_clustered": 12402,
+          "n_noise": 5598,
+          "noise_fraction": 0.311,
+          "silhouette": 0.6986,
+          "davies_bouldin": 0.3486,
+          "eps_km": 2.0,
+          "min_samples": 10,
+          "median_radius_km": 4.77
+        },
+        {
+          "n_clusters": 63,
+          "n_clustered": 11671,
+          "n_noise": 6329,
+          "noise_fraction": 0.3516,
+          "silhouette": 0.7757,
+          "davies_bouldin": 0.3082,
+          "eps_km": 2.0,
+          "min_samples": 15,
+          "median_radius_km": 4.54
+        },
+        {
+          "n_clusters": 194,
+          "n_clustered": 15413,
+          "n_noise": 2587,
+          "noise_fraction": 0.1437,
+          "silhouette": 0.2448,
+          "davies_bouldin": 0.5207,
+          "eps_km": 3.0,
+          "min_samples": 4,
+          "median_radius_km": 3.23
+        },
+        {
+          "n_clusters": 106,
+          "n_clustered": 14532,
+          "n_noise": 3468,
+          "noise_fraction": 0.1927,
+          "silhouette": 0.5256,
+          "davies_bouldin": 0.428,
+          "eps_km": 3.0,
+          "min_samples": 6,
+          "median_radius_km": 5.1
+        },
+        {
+          "n_clusters": 66,
+          "n_clustered": 13664,
+          "n_noise": 4336,
+          "noise_fraction": 0.2409,
+          "silhouette": 0.6028,
+          "davies_bouldin": 0.3667,
+          "eps_km": 3.0,
+          "min_samples": 10,
+          "median_radius_km": 5.67
+        },
+        {
+          "n_clusters": 63,
+          "n_clustered": 13196,
+          "n_noise": 4804,
+          "noise_fraction": 0.2669,
+          "silhouette": 0.7355,
+          "davies_bouldin": 0.3242,
+          "eps_km": 3.0,
+          "min_samples": 15,
+          "median_radius_km": 5.33
+        },
+        {
+          "n_clusters": 166,
+          "n_clustered": 16406,
+          "n_noise": 1594,
+          "noise_fraction": 0.0886,
+          "silhouette": 0.1434,
+          "davies_bouldin": 0.5661,
+          "eps_km": 4.0,
+          "min_samples": 4,
+          "median_radius_km": 4.4
+        },
+        {
+          "n_clusters": 106,
+          "n_clustered": 15646,
+          "n_noise": 2354,
+          "noise_fraction": 0.1308,
+          "silhouette": 0.3404,
+          "davies_bouldin": 0.515,
+          "eps_km": 4.0,
+          "min_samples": 6,
+          "median_radius_km": 5.23
+        },
+        {
+          "n_clusters": 62,
+          "n_clustered": 14614,
+          "n_noise": 3386,
+          "noise_fraction": 0.1881,
+          "silhouette": 0.5314,
+          "davies_bouldin": 0.399,
+          "eps_km": 4.0,
+          "min_samples": 10,
+          "median_radius_km": 6.39
+        },
+        {
+          "n_clusters": 60,
+          "n_clustered": 14098,
+          "n_noise": 3902,
+          "noise_fraction": 0.2168,
+          "silhouette": 0.6381,
+          "davies_bouldin": 0.3622,
+          "eps_km": 4.0,
+          "min_samples": 15,
+          "median_radius_km": 6.34
+        },
+        {
+          "n_clusters": 106,
+          "n_clustered": 17007,
+          "n_noise": 993,
+          "noise_fraction": 0.0552,
+          "silhouette": 0.0094,
+          "davies_bouldin": 0.614,
+          "eps_km": 5.0,
+          "min_samples": 4,
+          "median_radius_km": 5.16
+        },
+        {
+          "n_clusters": 61,
+          "n_clustered": 16359,
+          "n_noise": 1641,
+          "noise_fraction": 0.0912,
+          "silhouette": 0.3664,
+          "davies_bouldin": 0.5305,
+          "eps_km": 5.0,
+          "min_samples": 6,
+          "median_radius_km": 7.34
+        },
+        {
+          "n_clusters": 57,
+          "n_clustered": 15490,
+          "n_noise": 2510,
+          "noise_fraction": 0.1394,
+          "silhouette": 0.4668,
+          "davies_bouldin": 0.4584,
+          "eps_km": 5.0,
+          "min_samples": 10,
+          "median_radius_km": 6.86
+        },
+        {
+          "n_clusters": 45,
+          "n_clustered": 14795,
+          "n_noise": 3205,
+          "noise_fraction": 0.1781,
+          "silhouette": 0.6149,
+          "davies_bouldin": 0.3463,
+          "eps_km": 5.0,
+          "min_samples": 15,
+          "median_radius_km": 7.84
+        },
+        {
+          "n_clusters": 30,
+          "n_clustered": 17729,
+          "n_noise": 271,
+          "noise_fraction": 0.0151,
+          "silhouette": 0.0579,
+          "davies_bouldin": 0.6478,
+          "eps_km": 8.0,
+          "min_samples": 4,
+          "median_radius_km": 10.11
+        },
+        {
+          "n_clusters": 24,
+          "n_clustered": 17526,
+          "n_noise": 474,
+          "noise_fraction": 0.0263,
+          "silhouette": 0.3714,
+          "davies_bouldin": 0.5208,
+          "eps_km": 8.0,
+          "min_samples": 6,
+          "median_radius_km": 18.74
+        },
+        {
+          "n_clusters": 25,
+          "n_clustered": 17049,
+          "n_noise": 951,
+          "noise_fraction": 0.0528,
+          "silhouette": 0.5099,
+          "davies_bouldin": 0.4569,
+          "eps_km": 8.0,
+          "min_samples": 10,
+          "median_radius_km": 20.37
+        },
+        {
+          "n_clusters": 25,
+          "n_clustered": 16626,
+          "n_noise": 1374,
+          "noise_fraction": 0.0763,
+          "silhouette": 0.471,
+          "davies_bouldin": 0.4064,
+          "eps_km": 8.0,
+          "min_samples": 15,
+          "median_radius_km": 18.22
+        },
+        {
+          "n_clusters": 6,
+          "n_clustered": 17934,
+          "n_noise": 66,
+          "noise_fraction": 0.0037,
+          "silhouette": 0.1606,
+          "davies_bouldin": 0.7334,
+          "eps_km": 12.0,
+          "min_samples": 4,
+          "median_radius_km": 50.02
+        },
+        {
+          "n_clusters": 7,
+          "n_clustered": 17904,
+          "n_noise": 96,
+          "noise_fraction": 0.0053,
+          "silhouette": 0.3628,
+          "davies_bouldin": 0.8184,
+          "eps_km": 12.0,
+          "min_samples": 6,
+          "median_radius_km": 56.76
+        },
+        {
+          "n_clusters": 10,
+          "n_clustered": 17817,
+          "n_noise": 183,
+          "noise_fraction": 0.0102,
+          "silhouette": 0.5108,
+          "davies_bouldin": 0.5818,
+          "eps_km": 12.0,
+          "min_samples": 10,
+          "median_radius_km": 57.73
+        },
+        {
+          "n_clusters": 14,
+          "n_clustered": 17621,
+          "n_noise": 379,
+          "noise_fraction": 0.0211,
+          "silhouette": 0.5623,
+          "davies_bouldin": 0.4994,
+          "eps_km": 12.0,
+          "min_samples": 15,
+          "median_radius_km": 36.84
+        },
+        {
+          "n_clusters": 3,
+          "n_clustered": 17993,
+          "n_noise": 7,
+          "noise_fraction": 0.0004,
+          "silhouette": 0.2032,
+          "davies_bouldin": 0.7278,
+          "eps_km": 20.0,
+          "min_samples": 4,
+          "median_radius_km": 109.32
+        },
+        {
+          "n_clusters": 3,
+          "n_clustered": 17993,
+          "n_noise": 7,
+          "noise_fraction": 0.0004,
+          "silhouette": 0.2032,
+          "davies_bouldin": 0.7278,
+          "eps_km": 20.0,
+          "min_samples": 6,
+          "median_radius_km": 109.32
+        },
+        {
+          "n_clusters": 5,
+          "n_clustered": 17993,
+          "n_noise": 7,
+          "noise_fraction": 0.0004,
+          "silhouette": 0.0761,
+          "davies_bouldin": 0.789,
+          "eps_km": 20.0,
+          "min_samples": 10,
+          "median_radius_km": 43.48
+        },
+        {
+          "n_clusters": 5,
+          "n_clustered": 17985,
+          "n_noise": 15,
+          "noise_fraction": 0.0008,
+          "silhouette": 0.0762,
+          "davies_bouldin": 0.7894,
+          "eps_km": 20.0,
+          "min_samples": 15,
+          "median_radius_km": 43.38
+        }
+      ],
+      "n_zones": 25,
+      "card": {
+        "intended_use": "Identify concentrated incident zones small enough to patrol.",
+        "out_of_scope": "Any inference about the people who live in a zone. A hotspot is a property of recorded incidents, and recorded incidents reflect where enforcement has previously been directed.",
+        "decision_threshold": "None. Zones are ranked by incident count; the median zone radius is held under 15 km so a zone is a place a unit can actually be sent.",
+        "monitoring": "Whether zones re-appear in the same places every cycle, which would indicate the feedback loop rather than a stable pattern.",
+        "retrain_cadence": "Monthly.",
+        "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+        "review_by": "2027-02-28"
+      },
+      "headline": "see metrics"
+    },
+    "case_pendency": {
+      "name": "case_pendency",
+      "algorithm": "Discrete-time survival (Logistic Regression hazard, 30-day intervals)",
+      "task": "time-to-event / survival analysis (case pendency)",
+      "target": "days from FIR registration to first chargesheet, right-censored at extract date",
+      "features": [
+        "severity_score",
+        "fatalities",
+        "injured",
+        "witnesses",
+        "accused_count",
+        "officer_experience_years",
+        "station_load",
+        "spec_match",
+        "max_accused_prior_cases",
+        "mean_accused_prior_cases",
+        "crime_type",
+        "district",
+        "rank",
+        "time_of_day",
+        "interval"
+      ],
+      "split": {
+        "strategy": "temporal (train strictly before cutoff)",
+        "cutoff": "2025-08-14",
+        "n_train": 14391,
+        "n_test": 3607,
+        "train_span": {
+          "from": "2020-01-01",
+          "to": "2025-08-13"
+        },
+        "test_span": {
+          "from": "2025-08-14",
+          "to": "2026-12-28"
+        },
+        "train_event_rate": 0.3465,
+        "test_event_rate": 0.4355
+      },
+      "metrics": {
+        "c_index": 0.6111,
+        "integrated_brier_score": 0.2093,
+        "n_test": 3607,
+        "n_test_censored": 2036,
+        "censoring_rate": 0.5645,
+        "per_horizon": [
+          {
+            "horizon_days": 60,
+            "roc_auc": 0.5492,
+            "brier": 0.1025,
+            "n_evaluable": 3371,
+            "observed_charge_rate": 0.1086
+          },
+          {
+            "horizon_days": 90,
+            "roc_auc": 0.5702,
+            "brier": 0.1574,
+            "n_evaluable": 3259,
+            "observed_charge_rate": 0.1872
+          },
+          {
+            "horizon_days": 180,
+            "roc_auc": 0.6227,
+            "brier": 0.2445,
+            "n_evaluable": 2898,
+            "observed_charge_rate": 0.4058
+          },
+          {
+            "horizon_days": 360,
+            "roc_auc": 0.6732,
+            "brier": 0.2571,
+            "n_evaluable": 2166,
+            "observed_charge_rate": 0.6939
+          }
+        ]
+      },
+      "baselines": [
+        {
+          "strategy": "Kaplan-Meier (no covariates)",
+          "c_index": 0.5,
+          "integrated_brier_score": 0.2411,
+          "median_days_to_chargesheet": null,
+          "note": "The marginal survival curve \u2014 identical prediction for every case, so it cannot rank and scores exactly 0.5 by construction. It is still the right Brier reference: a covariate model that does not beat its integrated Brier score has learned nothing useful."
+        }
+      ],
+      "notes": [
+        "Right-censoring is modelled, not discarded. A case still open at the extract date contributes every interval it survived and is never scored as a failure \u2014 which is what lets this model score the live docket, including cases registered days ago.",
+        "The binary case_closure model must exclude the 1314 cases registered in the last 180 days to keep its target observable. This model uses them.",
+        "2036 of 3607 test cases (56%) are censored. A naive 'fraction charged so far' statistic would count every one as a failure and understate performance across the board.",
+        "One fitted model answers every horizon: the 60/90/180/360-day figures are read off the same survival curve rather than coming from separate models that could contradict each other.",
+        "Per-horizon metrics use only cases whose outcome at that horizon is genuinely observable; the count is published as n_evaluable so a figure computed on few rows cannot masquerade as a stable one.",
+        "Integrated Brier is the censoring-restricted estimate rather than the IPCW-weighted one \u2014 the conservative choice.",
+        "Pendency risk is a workload triage signal. It reflects how comparable past investigations progressed and must never be read as a judgement of an officer or of any accused person."
+      ],
+      "artifact": "case_pendency.joblib",
+      "selected_model": "Logistic Regression",
+      "validation_c_index": {
+        "Logistic Regression": 0.6405,
+        "Gradient Boosting": 0.6403
+      },
+      "interval_days": 30,
+      "n_intervals": 12,
+      "brier_by_horizon": [
+        {
+          "horizon_days": 30,
+          "brier": 0.0375,
+          "n_evaluable": 3501,
+          "observed_rate": 0.0354
+        },
+        {
+          "horizon_days": 60,
+          "brier": 0.1025,
+          "n_evaluable": 3371,
+          "observed_rate": 0.1086
+        },
+        {
+          "horizon_days": 90,
+          "brier": 0.1574,
+          "n_evaluable": 3259,
+          "observed_rate": 0.1872
+        },
+        {
+          "horizon_days": 120,
+          "brier": 0.1993,
+          "n_evaluable": 3127,
+          "observed_rate": 0.2683
+        },
+        {
+          "horizon_days": 150,
+          "brier": 0.2269,
+          "n_evaluable": 3008,
+          "observed_rate": 0.3388
+        },
+        {
+          "horizon_days": 180,
+          "brier": 0.2445,
+          "n_evaluable": 2898,
+          "observed_rate": 0.4058
+        },
+        {
+          "horizon_days": 210,
+          "brier": 0.2514,
+          "n_evaluable": 2783,
+          "observed_rate": 0.4581
+        },
+        {
+          "horizon_days": 240,
+          "brier": 0.2566,
+          "n_evaluable": 2655,
+          "observed_rate": 0.5126
+        },
+        {
+          "horizon_days": 270,
+          "brier": 0.2603,
+          "n_evaluable": 2538,
+          "observed_rate": 0.5579
+        },
+        {
+          "horizon_days": 300,
+          "brier": 0.2599,
+          "n_evaluable": 2419,
+          "observed_rate": 0.6015
+        },
+        {
+          "horizon_days": 330,
+          "brier": 0.2584,
+          "n_evaluable": 2288,
+          "observed_rate": 0.6503
+        },
+        {
+          "horizon_days": 360,
+          "brier": 0.2571,
+          "n_evaluable": 2166,
+          "observed_rate": 0.6939
+        }
+      ],
+      "kaplan_meier_curve": {
+        "times": [
+          30.0,
+          60.0,
+          90.0,
+          120.0,
+          150.0,
+          180.0,
+          210.0,
+          240.0,
+          270.0,
+          300.0,
+          330.0,
+          360.0
+        ],
+        "survival": [
+          0.9809,
+          0.9289,
+          0.8768,
+          0.8282,
+          0.7871,
+          0.7564,
+          0.7303,
+          0.7071,
+          0.6941,
+          0.6842,
+          0.6749,
+          0.6702
+        ]
+      },
+      "banned_features": [
+        "cases_assigned",
+        "closure_rate",
+        "commendations"
+      ],
+      "cases_recovered_from_censoring": 1314,
+      "card": {
+        "intended_use": "Identify open FIRs likely to remain pending, and where backlog is accumulating.",
+        "out_of_scope": "Scoring cases beyond the observation grid \u2014 the model refuses these rather than extrapolating, and that refusal must not be worked around downstream.",
+        "decision_threshold": "0.7 predicted probability of still being open at the horizon marks a case for supervisory review.",
+        "monitoring": "Share of the open docket the model declines to score; if that grows, the grid needs extending rather than the refusal relaxing.",
+        "retrain_cadence": "Quarterly.",
+        "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+        "review_by": "2027-02-28"
+      },
+      "headline": "C-index 0.611, IBS 0.209 (baseline IBS 0.241)"
+    },
+    "crime_forecast": {
+      "name": "crime_forecast",
+      "algorithm": "RidgeCV on linear trend + Fourier seasonality (52/26/13-week harmonics)",
+      "task": "univariate time-series forecasting",
+      "target": "weekly incident count",
+      "features": [
+        "normalised trend",
+        "sin/cos harmonics at 52, 26 and 13 weeks"
+      ],
+      "split": {
+        "strategy": "walk-forward, 6 origins, 8-week horizon",
+        "n_train": 366,
+        "series_span": {
+          "from": "2020-01-05",
+          "to": "2027-01-03"
+        }
+      },
+      "metrics": {
+        "mae": 8.047,
+        "rmse": 11.422,
+        "mape": 40.71,
+        "bias": -2.146,
+        "n": 48,
+        "mase": 0.64,
+        "interval_coverage": 0.7708,
+        "interval_nominal": 0.8
+      },
+      "baselines": [
+        {
+          "strategy": "naive (last value)",
+          "mae": 11.458,
+          "rmse": 15.222,
+          "mape": 52.42,
+          "bias": -7.667,
+          "n": 48,
+          "mase": 0.911
+        },
+        {
+          "strategy": "seasonal naive (52w)",
+          "mae": 8.625,
+          "rmse": 10.227,
+          "mape": 28.59,
+          "bias": 0.417,
+          "n": 48,
+          "mase": 0.686
+        },
+        {
+          "strategy": "moving average (4w)",
+          "mae": 7.969,
+          "rmse": 11.484,
+          "mape": 40.84,
+          "bias": -2.958,
+          "n": 48,
+          "mase": 0.634
+        },
+        {
+          "strategy": "drift",
+          "mae": 11.654,
+          "rmse": 15.406,
+          "mape": 53.02,
+          "bias": -7.941,
+          "n": 48,
+          "mase": 0.927
+        }
+      ],
+      "notes": [
+        "Backtested with 6 expanding-window origins: the model is re-fitted at each origin and scored only on the 8 weeks after it.",
+        "MASE < 1 means the model beats a naive last-value forecast; >= 1 means it does not.",
+        "Prediction intervals are built from out-of-sample backtest residuals at each horizon step, not from in-sample residuals, so the stated 80% is measurable.",
+        "Statistically INDISTINGUISHABLE from the strongest baseline (moving average (4w)): MAE difference -0.078, 95% CI [-0.615, +0.443] over 48 out-of-sample weeks. The point difference alone supports neither 'beats' nor 'fails to beat'.",
+        "Series diagnostics: 366 weeks, coefficient of variation 0.216, lag-1 autocorrelation -0.135. Near-zero or negative lag-1 autocorrelation: successive weeks carry almost no information about each other, so only the local level is predictable and no model should be expected to beat a moving average by more than noise.",
+        "Alternatives were backtested on the same folds and none improved on this: a Poisson GLM over the identical design (MAE 8.311) and a blend with the moving average. The blend appeared to win until its weight was chosen from each origin's own history rather than from the test folds, at which point it collapsed back to the plain model - the apparent gain was selection on the test set.",
+        "Realised interval coverage 77% against a nominal 80% (-3%)."
+      ],
+      "artifact": "crime_forecast.joblib",
+      "series_count": {
+        "districts": 31,
+        "crime_types": 10
+      },
+      "card": {
+        "intended_use": "Anticipate district-level weekly incident volume to inform rostering and patrol planning several weeks ahead.",
+        "out_of_scope": "Any individual-level inference, and any claim about *where* within a district an offence will occur. It forecasts counts.",
+        "decision_threshold": "None. The interval, not the point estimate, is the output \u2014 a plan that only works at the central value is not a plan.",
+        "monitoring": "Realised interval coverage against the nominal 80%, and MASE against the moving-average baseline it currently ties.",
+        "retrain_cadence": "Weekly once live; the seasonality terms need recent data.",
+        "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+        "review_by": "2027-02-28"
+      },
+      "headline": "MASE 0.640 \u2014 beats the naive forecast"
+    },
+    "case_closure": {
+      "name": "case_closure",
+      "algorithm": "Logistic Regression with Platt calibration",
+      "task": "binary classification (case progression)",
+      "target": "chargesheet filed within 180 days of registration",
+      "features": [
+        "severity_score",
+        "fatalities",
+        "injured",
+        "witnesses",
+        "accused_count",
+        "officer_experience_years",
+        "station_load",
+        "spec_match",
+        "max_accused_prior_cases",
+        "mean_accused_prior_cases",
+        "crime_type",
+        "district",
+        "rank",
+        "time_of_day"
+      ],
+      "split": {
+        "strategy": "temporal (train strictly before cutoff)",
+        "cutoff": "2025-03-11",
+        "n_train": 13341,
+        "n_test": 3343,
+        "train_span": {
+          "from": "2020-01-01",
+          "to": "2025-03-10"
+        },
+        "test_span": {
+          "from": "2025-03-11",
+          "to": "2026-07-01"
+        }
+      },
+      "metrics": {
+        "accuracy": 0.5154,
+        "balanced_accuracy": 0.5977,
+        "f1_macro": 0.5154,
+        "f1_weighted": 0.5169,
+        "mcc": 0.194,
+        "n_test": 3343,
+        "labels": [
+          "0",
+          "1"
+        ],
+        "confusion_matrix": [
+          [
+            875,
+            1428
+          ],
+          [
+            192,
+            848
+          ]
+        ],
+        "per_class": [
+          {
+            "label": "0",
+            "precision": 0.8201,
+            "recall": 0.3799,
+            "f1": 0.5193,
+            "support": 2303
+          },
+          {
+            "label": "1",
+            "precision": 0.3726,
+            "recall": 0.8154,
+            "f1": 0.5115,
+            "support": 1040
+          }
+        ],
+        "roc_auc": 0.6458,
+        "pr_auc": 0.4274,
+        "positive_rate": 0.3111,
+        "brier": 0.2035,
+        "calibration": {
+          "bins": [
+            {
+              "bin": "0.0-0.1",
+              "predicted": 0.0925,
+              "observed": 0.3333,
+              "n": 3
+            },
+            {
+              "bin": "0.1-0.2",
+              "predicted": 0.1675,
+              "observed": 0.1442,
+              "n": 617
+            },
+            {
+              "bin": "0.2-0.3",
+              "predicted": 0.2501,
+              "observed": 0.2718,
+              "n": 1203
+            },
+            {
+              "bin": "0.3-0.4",
+              "predicted": 0.345,
+              "observed": 0.3817,
+              "n": 875
+            },
+            {
+              "bin": "0.4-0.5",
+              "predicted": 0.4435,
+              "observed": 0.4322,
+              "n": 428
+            },
+            {
+              "bin": "0.5-0.6",
+              "predicted": 0.5404,
+              "observed": 0.4691,
+              "n": 162
+            },
+            {
+              "bin": "0.6-0.7",
+              "predicted": 0.6406,
+              "observed": 0.5098,
+              "n": 51
+            },
+            {
+              "bin": "0.7-0.8",
+              "predicted": 0.7292,
+              "observed": 0.5,
+              "n": 4
+            }
+          ],
+          "expected_calibration_error": 0.0291
+        },
+        "lift_table": [
+          {
+            "decile": "top 20%",
+            "n": 668,
+            "hit_rate": 0.4461,
+            "lift": 1.43,
+            "cumulative_capture": 0.2865
+          },
+          {
+            "decile": "top 40%",
+            "n": 669,
+            "hit_rate": 0.3961,
+            "lift": 1.27,
+            "cumulative_capture": 0.5413
+          },
+          {
+            "decile": "top 60%",
+            "n": 668,
+            "hit_rate": 0.3263,
+            "lift": 1.05,
+            "cumulative_capture": 0.751
+          },
+          {
+            "decile": "top 80%",
+            "n": 669,
+            "hit_rate": 0.2317,
+            "lift": 0.74,
+            "cumulative_capture": 0.9
+          },
+          {
+            "decile": "top 100%",
+            "n": 669,
+            "hit_rate": 0.1555,
+            "lift": 0.5,
+            "cumulative_capture": 1.0
+          }
+        ],
+        "operating_threshold": 0.2372,
+        "threshold_selected_on": "out-of-fold training probabilities, maximising Matthews correlation",
+        "at_threshold_0.5": {
+          "accuracy": 0.6862,
+          "balanced_accuracy": 0.5255,
+          "f1_macro": 0.4861,
+          "mcc": 0.0957
+        }
+      },
+      "baselines": [
+        {
+          "strategy": "base rate",
+          "base_rate": 0.2384,
+          "brier": 0.2196,
+          "roc_auc": 0.5
+        },
+        {
+          "strategy": "majority class",
+          "predicts": "0",
+          "accuracy": 0.6889,
+          "balanced_accuracy": 0.5,
+          "mcc": 0.0,
+          "note": "Accuracy here is the base rate of the majority class, not skill."
+        }
+      ],
+      "notes": [
+        "Target is time-boxed to 180 days using real chargesheet dates. Cases registered too recently for that window to have elapsed are excluded rather than being counted as failures.",
+        "Officer closure_rate, cases_assigned and commendations are banned features: they are aggregates of case outcomes and contain the label. The previous version of this model used all three.",
+        "Split is temporal on registration date, so the model is scored on cases registered after every case it learned from.",
+        "Base rate in the test window is 31.1%; read accuracy against that, not against 50%.",
+        "Decisions are taken at p >= 0.237, not 0.5. The model is calibrated and the base rate is well under half, so a correct probability rarely reaches 0.5 \u2014 a 0.5 cut labelled almost every case negative and produced a class-1 recall of 0.10. The threshold is chosen on out-of-fold training probabilities and applied unchanged to the test window.",
+        "Raw accuracy is LOWER at this threshold than at 0.5, and that is the intended direction: the majority-class baseline scores higher than both by never predicting the positive class at all. Balanced accuracy, F1-macro and MCC are the metrics that separate a useful model from that baseline here.",
+        "The threshold was selected under the training window's base rate (23.8%) and applied to a test window whose base rate is 31.1%. That shift moves the whole score distribution up, so the same cut flags 68.1% of test cases against 43.5% of training cases. Re-tuning the threshold until the test fraction looked better would be fitting the decision rule to the evaluation; it is left as chosen and the discrepancy reported. Re-derive it on every retrain.",
+        "The ranking, not this cut, is the operational artifact: read the lift table for how much of the positive class the top slice captures. The threshold exists so that the reported classification metrics reflect a decision rule that could actually be used."
+      ],
+      "artifact": "case_closure.joblib",
+      "cv_roc_auc": {
+        "Logistic Regression": 0.63,
+        "Gradient Boosting": 0.626
+      },
+      "selected_model": "Logistic Regression",
+      "permutation_importance": [
+        {
+          "feature": "mean_accused_prior_cases",
+          "importance": 0.0498
+        },
+        {
+          "feature": "witnesses",
+          "importance": 0.0258
+        },
+        {
+          "feature": "accused_count",
+          "importance": 0.0147
+        },
+        {
+          "feature": "severity_score",
+          "importance": 0.0138
+        },
+        {
+          "feature": "max_accused_prior_cases",
+          "importance": 0.0133
+        },
+        {
+          "feature": "officer_experience_years",
+          "importance": 0.006
+        },
+        {
+          "feature": "station_load",
+          "importance": 0.0008
+        },
+        {
+          "feature": "crime_type",
+          "importance": 0.0005
+        },
+        {
+          "feature": "time_of_day",
+          "importance": 0.0
+        },
+        {
+          "feature": "fatalities",
+          "importance": 0.0
+        },
+        {
+          "feature": "spec_match",
+          "importance": -0.0001
+        },
+        {
+          "feature": "district",
+          "importance": -0.0002
+        },
+        {
+          "feature": "rank",
+          "importance": -0.0003
+        },
+        {
+          "feature": "injured",
+          "importance": -0.0012
+        }
+      ],
+      "banned_features": [
+        "cases_assigned",
+        "closure_rate",
+        "commendations"
+      ],
+      "card": {
+        "intended_use": "Estimate which registered cases are unlikely to reach a chargesheet within 180 days, to inform supervisory follow-up.",
+        "out_of_scope": "Assessing an individual officer's performance. Station load and case complexity dominate this target, and using it for appraisal would penalise officers for their caseload.",
+        "decision_threshold": "No automatic action. Used to order a review queue.",
+        "monitoring": "Base rate drift \u2014 the target is time-boxed, so a change in filing practice moves it without the model changing at all.",
+        "retrain_cadence": "Quarterly.",
+        "owner": "SCRB Data Science (prototype \u2014 no production owner assigned)",
+        "review_by": "2027-02-28"
+      },
+      "headline": "ROC-AUC 0.646, PR-AUC 0.427"
+    }
+  },
+  "carried_forward": [
+    "case_pendency",
+    "conviction_outcome",
+    "crime_forecast",
+    "hotspot_clusters",
+    "narrative_classifier",
+    "recidivism_risk"
+  ]
+}

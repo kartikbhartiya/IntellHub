@@ -1,0 +1,73 @@
+# ---- Dependencies ----
+node_modules/
+# Vendored Linux wheels for Catalyst AppSail (397MB, regenerate with the pip --platform command; see README)
+appsail/_vendor/
+
+# ---- Secrets / env ----
+.env
+.env.*
+# Real Catalyst config holds live API keys — keep it local only; commit app-config.example.json instead.
+appsail/app-config.json
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- Next.js / frontend build output ----
+web/.next/
+web/out/
+web/tsconfig.tsbuildinfo
+
+# ---- Catalyst build & deploy artifacts ----
+.catalyst/
+catalyst-debug.log
+catalyst_backend.zip
+deploy_out*.txt
+temp_catalyst/
+test_cat*/
+
+# ---- Dead leftover scaffolding (unused by the live deploy) ----
+web/functions/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+
+# local dev scratch
+appsail/_srv*.log
+web/_dev*.log
+web/_*.png
+web/_*.js
+
+# Deploy-matched training venv (sklearn/pandas/numpy pinned to the AppSail runtime)
+.deployvenv/
+
+# Local audit sink. Production forwards these lines to an append-only
+# store outside the app; the working copy is never the record.
+appsail/audit.jsonl
+
+# Runtime prediction log. Same treatment as the audit sink: production forwards
+# these lines elsewhere, the working copy is never the record.
+appsail/predictions.jsonl
+appsail/predictions.jsonl.1
+
+# Local database built by load_to_db.py from the CSVs — derived, not source.
+appsail/corpus.db
+appsail/*.sqlite
+appsail/*.sqlite3
+
+# Artifact version archive. The live artifact is committed; the rolling history is
+# a local safety net and would otherwise grow the repo on every training run.
+appsail/artifacts/versions/
+
+appsail/audit.jsonl.pre-chain
+
+# Outcome feedback log. Runtime record, same treatment as the other two sinks.
+appsail/outcomes.jsonl
+appsail/outcomes.jsonl.1
+
+# Contest register. Runtime record, same treatment as the other sinks.
+appsail/contests.jsonl

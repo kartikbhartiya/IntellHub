@@ -1,0 +1,11 @@
+{
+  "client": {
+    "source": "web/out"
+  },
+  "appsail": [
+    {
+      "name": "ksp-intelhub-core",
+      "source": "appsail"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+CrimeSubHeadID,CrimeHeadID,CrimeHeadName,SeqID
+1,2,Chain Snatching,1
+2,2,House Break-in (Night),2
+3,2,Vehicle Theft,3
+4,6,Extortion,4
+5,4,Narcotics Distribution,5
+6,5,Sandalwood Smuggling,6
+7,3,Cyber Fraud (Jamtara style),7
+8,1,Murder,8
+9,1,Assault,9
+10,1,Homicide,10

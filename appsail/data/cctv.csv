@@ -1,0 +1,501 @@
+camera_id,district,lat,lng,timestamp,video_url,detected_faces,detected_vehicle,case_link
+CAM-MAN-1000,Mangaluru,12.86339,74.90023,2023-04-01 09:46:05,https://evidence.ksp.gov.in/clip/10000.mp4,SUS-1043;SUS-1526,,FIR-20087
+CAM-BEN-1001,Bengaluru Urban,12.92084,77.58228,2023-10-24 02:10:18,https://evidence.ksp.gov.in/clip/10001.mp4,,KA-19-KD-1695,
+CAM-BEL-1002,Belagavi,15.85333,74.4507,2023-12-07 03:18:03,https://evidence.ksp.gov.in/clip/10002.mp4,SUS-1089,,FIR-24889
+CAM-BEN-1003,Bengaluru Urban,12.97736,77.60389,2023-12-16 23:11:48,https://evidence.ksp.gov.in/clip/10003.mp4,SUS-1783;SUS-1224,,FIR-24187
+CAM-BEN-1004,Bengaluru Urban,12.96056,77.59414,2023-02-04 23:19:06,https://evidence.ksp.gov.in/clip/10004.mp4,SUS-1566,,FIR-23097
+CAM-BAL-1005,Ballari,15.02333,76.96236,2023-12-01 13:37:22,https://evidence.ksp.gov.in/clip/10005.mp4,SUS-1649,KA-34-CG-1997,FIR-23048
+CAM-HUB-1006,Hubballi-Dharwad,15.37708,75.14332,2023-09-30 08:23:11,https://evidence.ksp.gov.in/clip/10006.mp4,,KA-19-ND-6311,
+CAM-BEN-1007,Bengaluru Urban,12.86252,77.63307,2023-01-15 13:12:36,https://evidence.ksp.gov.in/clip/10007.mp4,SUS-1294,KA-14-LD-1580,FIR-23428
+CAM-BEL-1008,Belagavi,15.91114,74.49012,2023-10-20 23:40:03,https://evidence.ksp.gov.in/clip/10008.mp4,SUS-1379,,FIR-23772
+CAM-BAL-1009,Ballari,15.0354,76.90772,2023-07-15 16:07:01,https://evidence.ksp.gov.in/clip/10009.mp4,SUS-1708,KA-41-PB-8858,FIR-21954
+CAM-BEN-1010,Bengaluru Urban,12.91925,77.56046,2023-10-11 05:28:14,https://evidence.ksp.gov.in/clip/10010.mp4,SUS-1237,,FIR-23633
+CAM-MAN-1011,Mangaluru,12.88559,74.89512,2023-01-06 07:27:18,https://evidence.ksp.gov.in/clip/10011.mp4,SUS-1533,KA-25-GF-6453,FIR-21452
+CAM-MYS-1012,Mysuru,12.25603,76.65495,2023-01-12 12:07:52,https://evidence.ksp.gov.in/clip/10012.mp4,SUS-1060,KA-05-KB-7764,FIR-24114
+CAM-BEN-1013,Bengaluru Urban,12.95831,77.57885,2023-11-12 11:09:23,https://evidence.ksp.gov.in/clip/10013.mp4,SUS-1693,,FIR-24326
+CAM-BEL-1014,Belagavi,15.87037,74.53182,2023-01-16 11:12:47,https://evidence.ksp.gov.in/clip/10014.mp4,SUS-1346;SUS-1184,,FIR-24939
+CAM-BEN-1015,Bengaluru Urban,12.98043,77.5464,2023-03-03 08:26:22,https://evidence.ksp.gov.in/clip/10015.mp4,SUS-1591,,FIR-21663
+CAM-BEN-1016,Bengaluru Urban,13.01024,77.64737,2023-10-07 23:32:22,https://evidence.ksp.gov.in/clip/10016.mp4,SUS-1430,KA-34-HB-9462,FIR-21722
+CAM-TUM-1017,Tumakuru,13.42683,77.17463,2023-01-09 19:54:30,https://evidence.ksp.gov.in/clip/10017.mp4,SUS-1392;SUS-1198,KA-03-DB-9375,FIR-23665
+CAM-MYS-1018,Mysuru,12.26083,76.70116,2023-01-23 20:44:35,https://evidence.ksp.gov.in/clip/10018.mp4,SUS-1423,KA-20-NF-6354,FIR-20304
+CAM-BEN-1019,Bengaluru Urban,12.99503,77.55062,2023-09-21 18:03:40,https://evidence.ksp.gov.in/clip/10019.mp4,SUS-1593,,FIR-20933
+CAM-BEN-1020,Bengaluru Urban,13.04179,77.47631,2023-04-04 13:05:09,https://evidence.ksp.gov.in/clip/10020.mp4,SUS-1047,KA-19-KH-9722,FIR-20249
+CAM-MAN-1021,Mangaluru,12.8046,74.84402,2023-09-03 19:04:42,https://evidence.ksp.gov.in/clip/10021.mp4,,KA-21-HB-6541,
+CAM-BEL-1022,Belagavi,15.81978,74.51063,2023-11-02 18:49:36,https://evidence.ksp.gov.in/clip/10022.mp4,SUS-1189,,FIR-23554
+CAM-MYS-1023,Mysuru,12.26012,76.69714,2023-01-23 20:44:35,https://evidence.ksp.gov.in/clip/10023.mp4,,,
+CAM-HUB-1024,Hubballi-Dharwad,15.27494,75.16947,2023-07-08 04:46:17,https://evidence.ksp.gov.in/clip/10024.mp4,,,
+CAM-UDU-1025,Udupi,13.3398,74.75301,2023-03-04 18:03:11,https://evidence.ksp.gov.in/clip/10025.mp4,SUS-1221;SUS-1764,,FIR-20553
+CAM-MAN-1026,Mangaluru,12.84019,74.8728,2023-05-08 02:33:25,https://evidence.ksp.gov.in/clip/10026.mp4,SUS-1582,,FIR-24703
+CAM-SHI-1027,Shivamogga,13.8782,75.5248,2023-05-08 08:29:52,https://evidence.ksp.gov.in/clip/10027.mp4,SUS-1161,,FIR-23477
+CAM-BEN-1028,Bengaluru Urban,12.96369,77.53069,2023-03-10 19:07:17,https://evidence.ksp.gov.in/clip/10028.mp4,SUS-1569,KA-34-FC-2669,FIR-22290
+CAM-HUB-1029,Hubballi-Dharwad,15.37802,75.04684,2023-02-02 11:10:52,https://evidence.ksp.gov.in/clip/10029.mp4,SUS-1113,KA-09-RA-3623,FIR-24961
+CAM-BEN-1030,Bengaluru Urban,12.96205,77.65237,2023-08-19 13:22:06,https://evidence.ksp.gov.in/clip/10030.mp4,SUS-1373,,FIR-21951
+CAM-BEN-1031,Bengaluru Urban,13.01084,77.58593,2023-12-21 18:49:59,https://evidence.ksp.gov.in/clip/10031.mp4,SUS-1487,,FIR-22852
+CAM-BEN-1032,Bengaluru Urban,13.02954,77.64032,2023-04-15 06:14:36,https://evidence.ksp.gov.in/clip/10032.mp4,SUS-1143,,FIR-23809
+CAM-BEN-1033,Bengaluru Urban,12.9273,77.65546,2023-01-31 14:28:15,https://evidence.ksp.gov.in/clip/10033.mp4,SUS-1027,,FIR-20067
+CAM-BEN-1034,Bengaluru Urban,12.89282,77.57714,2023-05-08 10:19:19,https://evidence.ksp.gov.in/clip/10034.mp4,SUS-1660,KA-20-HJ-4019,FIR-22193
+CAM-DAK-1035,Dakshina Kannada,12.88345,75.12921,2023-02-09 20:12:20,https://evidence.ksp.gov.in/clip/10035.mp4,SUS-1515,,FIR-22543
+CAM-HUB-1036,Hubballi-Dharwad,15.35779,75.13463,2023-10-10 04:23:41,https://evidence.ksp.gov.in/clip/10036.mp4,SUS-1293,KA-19-NH-9536,FIR-21848
+CAM-BAL-1037,Ballari,15.14147,76.94688,2023-11-10 10:43:00,https://evidence.ksp.gov.in/clip/10037.mp4,SUS-1499,,FIR-20503
+CAM-BEN-1038,Bengaluru Urban,12.91871,77.62596,2023-04-09 01:16:08,https://evidence.ksp.gov.in/clip/10038.mp4,SUS-1164,,FIR-21224
+CAM-MAN-1039,Mangaluru,12.85463,74.82608,2023-09-06 13:13:48,https://evidence.ksp.gov.in/clip/10039.mp4,,,
+CAM-MYS-1040,Mysuru,12.30721,76.71775,2023-10-04 21:09:57,https://evidence.ksp.gov.in/clip/10040.mp4,SUS-1010,,FIR-20279
+CAM-BAL-1041,Ballari,15.08639,76.83675,2023-06-22 02:06:44,https://evidence.ksp.gov.in/clip/10041.mp4,,,
+CAM-BEN-1042,Bengaluru Urban,13.00356,77.58678,2023-08-03 22:44:30,https://evidence.ksp.gov.in/clip/10042.mp4,,,
+CAM-BEN-1043,Bengaluru Urban,12.99015,77.54331,2023-02-15 14:07:01,https://evidence.ksp.gov.in/clip/10043.mp4,SUS-1249,KA-51-EC-6473,FIR-24612
+CAM-BEN-1044,Bengaluru Urban,12.92844,77.58258,2023-06-16 18:11:35,https://evidence.ksp.gov.in/clip/10044.mp4,SUS-1693,,FIR-24868
+CAM-UDU-1045,Udupi,13.203,74.71445,2023-12-18 15:07:34,https://evidence.ksp.gov.in/clip/10045.mp4,SUS-1509,,FIR-20307
+CAM-BEL-1046,Belagavi,15.81865,74.52062,2023-10-08 06:23:58,https://evidence.ksp.gov.in/clip/10046.mp4,,,
+CAM-UDU-1047,Udupi,13.32788,74.79377,2023-02-23 11:24:41,https://evidence.ksp.gov.in/clip/10047.mp4,SUS-1582,KA-34-ND-4816,FIR-22837
+CAM-UDU-1048,Udupi,13.32018,74.60612,2023-03-29 17:08:31,https://evidence.ksp.gov.in/clip/10048.mp4,,,
+CAM-BEN-1049,Bengaluru Urban,12.89959,77.6169,2023-12-08 11:54:53,https://evidence.ksp.gov.in/clip/10049.mp4,SUS-1274;SUS-1078,,FIR-21486
+CAM-BEN-1050,Bengaluru Urban,12.95879,77.59818,2023-04-09 22:11:09,https://evidence.ksp.gov.in/clip/10050.mp4,SUS-1181;SUS-1612,,FIR-20687
+CAM-DAK-1051,Dakshina Kannada,12.83958,75.16682,2023-08-15 20:55:47,https://evidence.ksp.gov.in/clip/10051.mp4,SUS-1244,,FIR-20424
+CAM-TUM-1052,Tumakuru,13.29675,77.12622,2023-09-04 14:25:35,https://evidence.ksp.gov.in/clip/10052.mp4,SUS-1357,KA-14-BH-3777,FIR-20108
+CAM-BEN-1053,Bengaluru Urban,13.05173,77.62955,2023-04-29 14:21:00,https://evidence.ksp.gov.in/clip/10053.mp4,,,
+CAM-MYS-1054,Mysuru,12.23874,76.65654,2023-09-26 15:55:25,https://evidence.ksp.gov.in/clip/10054.mp4,SUS-1531,,FIR-21148
+CAM-BEN-1055,Bengaluru Urban,12.92015,77.54916,2023-07-29 14:55:33,https://evidence.ksp.gov.in/clip/10055.mp4,SUS-1748;SUS-1621,,FIR-23714
+CAM-MAN-1056,Mangaluru,12.90935,74.89168,2023-10-17 15:24:17,https://evidence.ksp.gov.in/clip/10056.mp4,SUS-1321,,FIR-22256
+CAM-BEN-1057,Bengaluru Urban,13.05172,77.59181,2023-03-03 08:30:47,https://evidence.ksp.gov.in/clip/10057.mp4,SUS-1578,,FIR-24754
+CAM-MYS-1058,Mysuru,12.28125,76.6357,2023-10-29 04:35:54,https://evidence.ksp.gov.in/clip/10058.mp4,SUS-1565,,FIR-21532
+CAM-BAL-1059,Ballari,15.09422,76.87092,2023-07-15 20:00:07,https://evidence.ksp.gov.in/clip/10059.mp4,SUS-1406;SUS-1012,,FIR-23140
+CAM-SHI-1060,Shivamogga,13.94275,75.58304,2023-05-31 22:22:49,https://evidence.ksp.gov.in/clip/10060.mp4,SUS-1115,,FIR-24475
+CAM-BEN-1061,Bengaluru Urban,13.032,77.61324,2023-06-07 01:29:40,https://evidence.ksp.gov.in/clip/10061.mp4,SUS-1229;SUS-1075,,FIR-22226
+CAM-DAK-1062,Dakshina Kannada,12.80053,75.16779,2023-08-26 13:14:59,https://evidence.ksp.gov.in/clip/10062.mp4,,KA-49-EF-8300,
+CAM-BEN-1063,Bengaluru Urban,12.90213,77.61522,2023-05-02 19:00:31,https://evidence.ksp.gov.in/clip/10063.mp4,SUS-1145,,FIR-20421
+CAM-UDU-1064,Udupi,13.32703,74.74276,2023-03-22 12:33:53,https://evidence.ksp.gov.in/clip/10064.mp4,SUS-1508,,FIR-23269
+CAM-HUB-1065,Hubballi-Dharwad,15.43187,75.11373,2023-03-21 05:37:56,https://evidence.ksp.gov.in/clip/10065.mp4,SUS-1405;SUS-1406,KA-25-NF-9295,FIR-23043
+CAM-BEN-1066,Bengaluru Urban,13.00124,77.64106,2023-09-20 23:23:45,https://evidence.ksp.gov.in/clip/10066.mp4,,,
+CAM-DAK-1067,Dakshina Kannada,12.92968,75.07543,2023-05-29 07:18:32,https://evidence.ksp.gov.in/clip/10067.mp4,,,
+CAM-BAL-1068,Ballari,15.18167,76.95351,2023-05-08 03:55:22,https://evidence.ksp.gov.in/clip/10068.mp4,SUS-1087,KA-20-MG-6654,FIR-23081
+CAM-DAK-1069,Dakshina Kannada,12.86558,75.10149,2023-08-06 07:15:30,https://evidence.ksp.gov.in/clip/10069.mp4,SUS-1369,,FIR-24188
+CAM-HUB-1070,Hubballi-Dharwad,15.34909,75.11456,2023-03-30 08:17:48,https://evidence.ksp.gov.in/clip/10070.mp4,,,
+CAM-BEN-1071,Bengaluru Urban,12.98108,77.60392,2023-12-06 02:12:30,https://evidence.ksp.gov.in/clip/10071.mp4,,KA-20-RF-7221,
+CAM-UDU-1072,Udupi,13.34153,74.76025,2023-02-16 00:02:54,https://evidence.ksp.gov.in/clip/10072.mp4,SUS-1580,KA-19-AC-4793,FIR-21244
+CAM-BEL-1073,Belagavi,15.90327,74.54341,2023-09-24 15:15:37,https://evidence.ksp.gov.in/clip/10073.mp4,,KA-02-HA-7970,
+CAM-BEN-1074,Bengaluru Urban,12.97286,77.59741,2023-09-19 04:27:05,https://evidence.ksp.gov.in/clip/10074.mp4,SUS-1432,,FIR-23732
+CAM-BEL-1075,Belagavi,15.90617,74.50211,2023-06-09 13:00:50,https://evidence.ksp.gov.in/clip/10075.mp4,SUS-1691,,FIR-22057
+CAM-BEN-1076,Bengaluru Urban,13.06365,77.60134,2023-03-01 09:58:51,https://evidence.ksp.gov.in/clip/10076.mp4,SUS-1447,,FIR-21071
+CAM-BEN-1077,Bengaluru Urban,12.96129,77.58408,2023-08-04 12:09:36,https://evidence.ksp.gov.in/clip/10077.mp4,SUS-1544,KA-19-NF-2122,FIR-24523
+CAM-SHI-1078,Shivamogga,13.9424,75.55773,2023-04-16 16:10:56,https://evidence.ksp.gov.in/clip/10078.mp4,SUS-1378,,FIR-22155
+CAM-UDU-1079,Udupi,13.31932,74.74951,2023-03-04 22:29:29,https://evidence.ksp.gov.in/clip/10079.mp4,SUS-1395,KA-41-JA-4921,FIR-22528
+CAM-HUB-1080,Hubballi-Dharwad,15.35454,75.10441,2023-06-24 23:05:56,https://evidence.ksp.gov.in/clip/10080.mp4,SUS-1373,,FIR-21256
+CAM-MAN-1081,Mangaluru,12.98258,74.8769,2023-02-08 07:04:47,https://evidence.ksp.gov.in/clip/10081.mp4,SUS-1526,KA-20-PF-9836,FIR-24353
+CAM-UDU-1082,Udupi,13.30393,74.67481,2023-12-09 23:03:50,https://evidence.ksp.gov.in/clip/10082.mp4,,,
+CAM-SHI-1083,Shivamogga,13.97492,75.5243,2023-08-03 08:10:36,https://evidence.ksp.gov.in/clip/10083.mp4,,,
+CAM-BEN-1084,Bengaluru Urban,13.00086,77.6334,2023-10-07 23:32:22,https://evidence.ksp.gov.in/clip/10084.mp4,,KA-25-NA-8109,
+CAM-MYS-1085,Mysuru,12.30049,76.64579,2023-01-15 05:19:49,https://evidence.ksp.gov.in/clip/10085.mp4,SUS-1464,,FIR-22728
+CAM-HUB-1086,Hubballi-Dharwad,15.31398,75.13562,2023-05-21 12:42:41,https://evidence.ksp.gov.in/clip/10086.mp4,SUS-1092,,FIR-22242
+CAM-MYS-1087,Mysuru,12.28984,76.63565,2023-10-12 23:28:04,https://evidence.ksp.gov.in/clip/10087.mp4,,,
+CAM-HUB-1088,Hubballi-Dharwad,15.25922,75.14287,2023-03-01 04:18:23,https://evidence.ksp.gov.in/clip/10088.mp4,,KA-25-CG-3936,
+CAM-HUB-1089,Hubballi-Dharwad,15.40542,75.1084,2023-11-25 23:15:53,https://evidence.ksp.gov.in/clip/10089.mp4,SUS-1673,KA-25-CG-3936,FIR-24887
+CAM-BEN-1090,Bengaluru Urban,12.82505,77.60962,2023-02-24 09:01:01,https://evidence.ksp.gov.in/clip/10090.mp4,,KA-19-GB-1704,
+CAM-BEN-1091,Bengaluru Urban,12.93939,77.63658,2023-05-06 07:24:58,https://evidence.ksp.gov.in/clip/10091.mp4,SUS-1297,,FIR-22965
+CAM-DAK-1092,Dakshina Kannada,12.80719,75.06886,2023-05-28 23:24:54,https://evidence.ksp.gov.in/clip/10092.mp4,SUS-1509,,FIR-21800
+CAM-BEN-1093,Bengaluru Urban,12.96475,77.57405,2023-08-19 15:49:36,https://evidence.ksp.gov.in/clip/10093.mp4,SUS-1302,,FIR-24911
+CAM-BEN-1094,Bengaluru Urban,12.93181,77.61279,2023-12-09 15:07:08,https://evidence.ksp.gov.in/clip/10094.mp4,,KA-19-GB-1704,
+CAM-BEN-1095,Bengaluru Urban,12.84973,77.56122,2023-12-09 17:05:00,https://evidence.ksp.gov.in/clip/10095.mp4,SUS-1750,,FIR-23122
+CAM-HUB-1096,Hubballi-Dharwad,15.3655,75.14001,2023-12-16 01:06:59,https://evidence.ksp.gov.in/clip/10096.mp4,SUS-1099,,FIR-23211
+CAM-HUB-1097,Hubballi-Dharwad,15.38374,75.07806,2023-12-12 10:36:54,https://evidence.ksp.gov.in/clip/10097.mp4,SUS-1372,KA-20-PB-1774,FIR-22745
+CAM-DAK-1098,Dakshina Kannada,12.85562,75.08697,2023-03-08 00:21:44,https://evidence.ksp.gov.in/clip/10098.mp4,SUS-1568,KA-19-NG-7625,FIR-21635
+CAM-DAK-1099,Dakshina Kannada,12.89715,75.13115,2023-12-24 04:52:31,https://evidence.ksp.gov.in/clip/10099.mp4,,,
+CAM-BEN-1100,Bengaluru Urban,13.02488,77.64381,2023-12-07 07:19:10,https://evidence.ksp.gov.in/clip/10100.mp4,SUS-1591,KA-14-BH-9560,FIR-23737
+CAM-BEN-1101,Bengaluru Urban,12.91565,77.60132,2023-01-20 23:30:43,https://evidence.ksp.gov.in/clip/10101.mp4,,KA-34-PG-6870,
+CAM-DAK-1102,Dakshina Kannada,12.90818,75.04951,2023-05-15 12:20:30,https://evidence.ksp.gov.in/clip/10102.mp4,SUS-1197;SUS-1140,,FIR-23336
+CAM-UDU-1103,Udupi,13.22169,74.68898,2023-11-20 03:02:36,https://evidence.ksp.gov.in/clip/10103.mp4,SUS-1677,,FIR-22239
+CAM-BEN-1104,Bengaluru Urban,12.99013,77.59775,2023-08-07 20:17:33,https://evidence.ksp.gov.in/clip/10104.mp4,SUS-1311,KA-55-NB-8113,FIR-24059
+CAM-UDU-1105,Udupi,13.42143,74.7027,2023-09-23 23:13:59,https://evidence.ksp.gov.in/clip/10105.mp4,SUS-1256,,FIR-23904
+CAM-MYS-1106,Mysuru,12.29757,76.64321,2023-10-20 11:56:22,https://evidence.ksp.gov.in/clip/10106.mp4,SUS-1192,KA-21-CA-1406,FIR-24831
+CAM-BEN-1107,Bengaluru Urban,12.96434,77.49772,2023-05-12 11:29:20,https://evidence.ksp.gov.in/clip/10107.mp4,SUS-1127,KA-55-PC-4787,FIR-22693
+CAM-MAN-1108,Mangaluru,12.96932,74.8158,2023-09-26 04:59:34,https://evidence.ksp.gov.in/clip/10108.mp4,SUS-1209,,FIR-21032
+CAM-BEN-1109,Bengaluru Urban,12.98909,77.58059,2023-11-25 08:47:49,https://evidence.ksp.gov.in/clip/10109.mp4,SUS-1257,,FIR-24482
+CAM-TUM-1110,Tumakuru,13.32851,77.13204,2023-01-23 18:31:17,https://evidence.ksp.gov.in/clip/10110.mp4,SUS-1665,KA-22-EG-2981,FIR-20392
+CAM-MAN-1111,Mangaluru,12.91081,74.84366,2023-10-26 15:15:07,https://evidence.ksp.gov.in/clip/10111.mp4,SUS-1504,,FIR-22010
+CAM-MAN-1112,Mangaluru,12.91276,74.80956,2023-07-04 12:35:30,https://evidence.ksp.gov.in/clip/10112.mp4,SUS-1282,,FIR-20783
+CAM-HUB-1113,Hubballi-Dharwad,15.3637,75.13508,2023-09-30 08:23:11,https://evidence.ksp.gov.in/clip/10113.mp4,SUS-1359,,FIR-20627
+CAM-HUB-1114,Hubballi-Dharwad,15.36108,75.09019,2023-11-10 10:58:50,https://evidence.ksp.gov.in/clip/10114.mp4,SUS-1195;SUS-1425,,FIR-20059
+CAM-BEL-1115,Belagavi,15.86637,74.42851,2023-03-25 14:52:10,https://evidence.ksp.gov.in/clip/10115.mp4,SUS-1498,KA-34-NC-7700,FIR-20047
+CAM-SHI-1116,Shivamogga,13.82762,75.59007,2023-08-22 09:43:02,https://evidence.ksp.gov.in/clip/10116.mp4,,KA-05-AJ-2577,
+CAM-BEN-1117,Bengaluru Urban,12.99503,77.58618,2023-08-29 00:28:14,https://evidence.ksp.gov.in/clip/10117.mp4,,,
+CAM-BEN-1118,Bengaluru Urban,12.93792,77.61398,2023-02-05 00:06:14,https://evidence.ksp.gov.in/clip/10118.mp4,SUS-1392,,FIR-21742
+CAM-DAK-1119,Dakshina Kannada,12.88555,75.08127,2023-06-28 18:20:13,https://evidence.ksp.gov.in/clip/10119.mp4,SUS-1529,,FIR-20638
+CAM-UDU-1120,Udupi,13.34276,74.71289,2023-10-19 15:29:46,https://evidence.ksp.gov.in/clip/10120.mp4,,,
+CAM-DAK-1121,Dakshina Kannada,12.85436,75.12147,2023-09-28 18:18:35,https://evidence.ksp.gov.in/clip/10121.mp4,,,
+CAM-UDU-1122,Udupi,13.24659,74.69679,2023-11-04 05:22:08,https://evidence.ksp.gov.in/clip/10122.mp4,SUS-1021,KA-19-GF-9813,FIR-24870
+CAM-DAK-1123,Dakshina Kannada,12.80923,75.07254,2023-01-17 10:46:43,https://evidence.ksp.gov.in/clip/10123.mp4,SUS-1003,,FIR-22788
+CAM-BEN-1124,Bengaluru Urban,12.90924,77.60282,2023-02-11 23:33:12,https://evidence.ksp.gov.in/clip/10124.mp4,SUS-1690,,FIR-21018
+CAM-TUM-1125,Tumakuru,13.35741,77.13066,2023-07-25 23:15:16,https://evidence.ksp.gov.in/clip/10125.mp4,SUS-1181,,FIR-20233
+CAM-BAL-1126,Ballari,15.07911,76.9166,2023-04-27 16:52:18,https://evidence.ksp.gov.in/clip/10126.mp4,SUS-1679,,FIR-23743
+CAM-TUM-1127,Tumakuru,13.34814,77.16405,2023-02-03 05:58:47,https://evidence.ksp.gov.in/clip/10127.mp4,SUS-1060,,FIR-22654
+CAM-TUM-1128,Tumakuru,13.4001,77.14298,2023-10-15 23:45:05,https://evidence.ksp.gov.in/clip/10128.mp4,,,
+CAM-SHI-1129,Shivamogga,13.81213,75.53425,2023-09-13 04:39:24,https://evidence.ksp.gov.in/clip/10129.mp4,SUS-1457;SUS-1666,KA-20-HJ-8758,FIR-22681
+CAM-BEN-1130,Bengaluru Urban,13.06577,77.68068,2023-02-19 00:32:56,https://evidence.ksp.gov.in/clip/10130.mp4,SUS-1214,,FIR-22817
+CAM-SHI-1131,Shivamogga,13.91078,75.55284,2023-06-04 13:56:46,https://evidence.ksp.gov.in/clip/10131.mp4,SUS-1629,,FIR-22840
+CAM-MAN-1132,Mangaluru,12.93128,74.79316,2023-02-23 17:58:04,https://evidence.ksp.gov.in/clip/10132.mp4,,,
+CAM-BAL-1133,Ballari,15.09978,76.94356,2023-03-23 02:59:14,https://evidence.ksp.gov.in/clip/10133.mp4,SUS-1512;SUS-1510,KA-09-MF-8999,FIR-23826
+CAM-BEN-1134,Bengaluru Urban,12.91212,77.62672,2023-09-26 08:46:10,https://evidence.ksp.gov.in/clip/10134.mp4,SUS-1622,,FIR-20564
+CAM-BEN-1135,Bengaluru Urban,12.99113,77.73094,2023-12-30 03:07:50,https://evidence.ksp.gov.in/clip/10135.mp4,,KA-41-GH-9671,
+CAM-HUB-1136,Hubballi-Dharwad,15.47034,75.10893,2023-07-11 21:30:16,https://evidence.ksp.gov.in/clip/10136.mp4,,KA-51-NF-9763,
+CAM-BEN-1137,Bengaluru Urban,13.03492,77.56571,2023-10-11 20:46:45,https://evidence.ksp.gov.in/clip/10137.mp4,SUS-1674,KA-03-AA-6256,FIR-24711
+CAM-BAL-1138,Ballari,15.12882,76.90705,2023-07-03 16:27:29,https://evidence.ksp.gov.in/clip/10138.mp4,SUS-1265;SUS-1049,,FIR-21537
+CAM-BEN-1139,Bengaluru Urban,13.00401,77.61102,2023-10-21 16:56:11,https://evidence.ksp.gov.in/clip/10139.mp4,SUS-1159,,FIR-21369
+CAM-BEN-1140,Bengaluru Urban,13.00981,77.52114,2023-11-26 06:55:37,https://evidence.ksp.gov.in/clip/10140.mp4,SUS-1309,KA-09-MG-4546,FIR-24886
+CAM-BAL-1141,Ballari,15.112,76.89816,2023-01-25 13:41:33,https://evidence.ksp.gov.in/clip/10141.mp4,SUS-1278;SUS-1092,,FIR-24203
+CAM-MYS-1142,Mysuru,12.28361,76.65555,2023-01-22 22:05:47,https://evidence.ksp.gov.in/clip/10142.mp4,SUS-1059,KA-22-MG-7246,FIR-23719
+CAM-BEN-1143,Bengaluru Urban,12.97352,77.52899,2023-06-26 04:15:58,https://evidence.ksp.gov.in/clip/10143.mp4,SUS-1659,,FIR-21839
+CAM-MYS-1144,Mysuru,12.23348,76.64407,2023-12-07 20:48:53,https://evidence.ksp.gov.in/clip/10144.mp4,,,
+CAM-DAK-1145,Dakshina Kannada,12.8303,75.11625,2023-05-31 03:47:25,https://evidence.ksp.gov.in/clip/10145.mp4,SUS-1295,,FIR-22750
+CAM-UDU-1146,Udupi,13.38816,74.75569,2023-05-10 12:31:50,https://evidence.ksp.gov.in/clip/10146.mp4,SUS-1761,,FIR-21892
+CAM-BEN-1147,Bengaluru Urban,13.00831,77.6719,2023-09-02 10:51:33,https://evidence.ksp.gov.in/clip/10147.mp4,SUS-1666;SUS-1050,,FIR-21234
+CAM-MYS-1148,Mysuru,12.33211,76.55185,2023-06-15 11:41:22,https://evidence.ksp.gov.in/clip/10148.mp4,SUS-1177,,FIR-22782
+CAM-BEN-1149,Bengaluru Urban,12.97352,77.53494,2023-11-24 07:55:41,https://evidence.ksp.gov.in/clip/10149.mp4,SUS-1397,,FIR-23111
+CAM-MYS-1150,Mysuru,12.22281,76.65321,2023-02-24 01:45:50,https://evidence.ksp.gov.in/clip/10150.mp4,SUS-1729,KA-25-JE-8769,FIR-24629
+CAM-MYS-1151,Mysuru,12.21947,76.67542,2023-06-27 12:36:27,https://evidence.ksp.gov.in/clip/10151.mp4,SUS-1425,,FIR-22628
+CAM-SHI-1152,Shivamogga,13.82768,75.50867,2023-06-11 08:46:10,https://evidence.ksp.gov.in/clip/10152.mp4,SUS-1691,KA-05-AJ-2577,FIR-21747
+CAM-UDU-1153,Udupi,13.38391,74.75134,2023-03-18 05:39:59,https://evidence.ksp.gov.in/clip/10153.mp4,SUS-1109,,FIR-22976
+CAM-DAK-1154,Dakshina Kannada,12.86849,75.20123,2023-10-08 13:39:52,https://evidence.ksp.gov.in/clip/10154.mp4,SUS-1189;SUS-1541,,FIR-21564
+CAM-BEN-1155,Bengaluru Urban,13.04065,77.56877,2023-01-09 07:03:57,https://evidence.ksp.gov.in/clip/10155.mp4,SUS-1642,KA-55-LC-1183,FIR-21889
+CAM-BEN-1156,Bengaluru Urban,12.94111,77.53144,2023-08-01 06:39:50,https://evidence.ksp.gov.in/clip/10156.mp4,SUS-1486,KA-34-NF-4842,FIR-21662
+CAM-BEN-1157,Bengaluru Urban,12.92186,77.619,2023-10-01 07:30:58,https://evidence.ksp.gov.in/clip/10157.mp4,SUS-1775;SUS-1295,,FIR-24452
+CAM-SHI-1158,Shivamogga,13.91215,75.54026,2023-04-18 18:11:12,https://evidence.ksp.gov.in/clip/10158.mp4,SUS-1386,KA-05-DB-3206,FIR-24960
+CAM-BEN-1159,Bengaluru Urban,13.00529,77.57701,2023-04-23 02:02:44,https://evidence.ksp.gov.in/clip/10159.mp4,,,
+CAM-BEN-1160,Bengaluru Urban,12.9231,77.55301,2023-02-06 15:10:48,https://evidence.ksp.gov.in/clip/10160.mp4,SUS-1234,,FIR-20332
+CAM-DAK-1161,Dakshina Kannada,12.80274,75.12077,2023-07-21 00:09:23,https://evidence.ksp.gov.in/clip/10161.mp4,SUS-1349,KA-49-AH-4881,FIR-20287
+CAM-DAK-1162,Dakshina Kannada,12.94759,75.1551,2023-04-21 08:26:30,https://evidence.ksp.gov.in/clip/10162.mp4,SUS-1086;SUS-1227,,FIR-22402
+CAM-BEN-1163,Bengaluru Urban,12.9722,77.58599,2023-11-04 19:50:01,https://evidence.ksp.gov.in/clip/10163.mp4,SUS-1645,KA-03-QJ-8594,FIR-21324
+CAM-DAK-1164,Dakshina Kannada,12.84775,75.05906,2023-12-18 00:01:44,https://evidence.ksp.gov.in/clip/10164.mp4,SUS-1415,,FIR-24778
+CAM-HUB-1165,Hubballi-Dharwad,15.29444,75.18534,2023-11-15 15:57:12,https://evidence.ksp.gov.in/clip/10165.mp4,SUS-1636;SUS-1772,,FIR-20641
+CAM-HUB-1166,Hubballi-Dharwad,15.37116,75.15582,2023-12-16 01:06:59,https://evidence.ksp.gov.in/clip/10166.mp4,SUS-1583,,FIR-23211
+CAM-BEN-1167,Bengaluru Urban,13.0119,77.56068,2023-09-22 05:46:29,https://evidence.ksp.gov.in/clip/10167.mp4,,,
+CAM-MYS-1168,Mysuru,12.28807,76.57736,2023-04-27 11:09:48,https://evidence.ksp.gov.in/clip/10168.mp4,SUS-1279,,FIR-23769
+CAM-HUB-1169,Hubballi-Dharwad,15.33556,75.17088,2023-09-02 03:20:51,https://evidence.ksp.gov.in/clip/10169.mp4,SUS-1036,KA-09-CD-5500,FIR-20071
+CAM-MAN-1170,Mangaluru,12.85431,74.82777,2023-01-08 08:30:32,https://evidence.ksp.gov.in/clip/10170.mp4,SUS-1222,KA-09-RD-2033,FIR-23247
+CAM-MYS-1171,Mysuru,12.32187,76.58809,2023-11-06 22:24:48,https://evidence.ksp.gov.in/clip/10171.mp4,SUS-1793,,FIR-24134
+CAM-BEN-1172,Bengaluru Urban,12.98013,77.60061,2023-11-07 22:15:27,https://evidence.ksp.gov.in/clip/10172.mp4,,,
+CAM-MYS-1173,Mysuru,12.28407,76.64957,2023-05-24 09:20:32,https://evidence.ksp.gov.in/clip/10173.mp4,SUS-1765,,FIR-20570
+CAM-BEN-1174,Bengaluru Urban,13.05483,77.58687,2023-11-04 14:35:13,https://evidence.ksp.gov.in/clip/10174.mp4,SUS-1772,,FIR-22904
+CAM-BEN-1175,Bengaluru Urban,12.97685,77.53085,2023-04-19 08:31:41,https://evidence.ksp.gov.in/clip/10175.mp4,SUS-1751,KA-01-KB-4292,FIR-23297
+CAM-SHI-1176,Shivamogga,13.92387,75.55622,2023-06-27 09:40:13,https://evidence.ksp.gov.in/clip/10176.mp4,SUS-1507,,FIR-23595
+CAM-BAL-1177,Ballari,15.20746,76.91759,2023-05-31 03:02:22,https://evidence.ksp.gov.in/clip/10177.mp4,,,
+CAM-MAN-1178,Mangaluru,12.90276,74.8827,2023-07-24 22:39:37,https://evidence.ksp.gov.in/clip/10178.mp4,SUS-1592,,FIR-24471
+CAM-DAK-1179,Dakshina Kannada,12.88686,75.0438,2023-03-03 06:18:25,https://evidence.ksp.gov.in/clip/10179.mp4,,KA-34-DA-7140,
+CAM-HUB-1180,Hubballi-Dharwad,15.35915,75.17624,2023-08-20 13:12:30,https://evidence.ksp.gov.in/clip/10180.mp4,SUS-1339,KA-09-LA-7132,FIR-22144
+CAM-UDU-1181,Udupi,13.39789,74.74082,2023-02-24 05:26:56,https://evidence.ksp.gov.in/clip/10181.mp4,,KA-41-QJ-4360,
+CAM-BEN-1182,Bengaluru Urban,13.00875,77.5796,2023-11-09 22:46:47,https://evidence.ksp.gov.in/clip/10182.mp4,SUS-1774,KA-19-BE-5865,FIR-20040
+CAM-BEN-1183,Bengaluru Urban,12.99145,77.61797,2023-08-12 17:44:15,https://evidence.ksp.gov.in/clip/10183.mp4,,,
+CAM-MYS-1184,Mysuru,12.31591,76.59411,2023-03-05 14:24:28,https://evidence.ksp.gov.in/clip/10184.mp4,SUS-1309,KA-20-MG-6654,FIR-21016
+CAM-HUB-1185,Hubballi-Dharwad,15.28804,75.08437,2023-03-17 00:06:00,https://evidence.ksp.gov.in/clip/10185.mp4,SUS-1335,KA-05-BC-6983,FIR-20648
+CAM-BAL-1186,Ballari,15.10807,76.91342,2023-07-26 05:39:55,https://evidence.ksp.gov.in/clip/10186.mp4,,,
+CAM-BEN-1187,Bengaluru Urban,13.03129,77.52109,2023-12-29 19:49:34,https://evidence.ksp.gov.in/clip/10187.mp4,SUS-1614,,FIR-21496
+CAM-UDU-1188,Udupi,13.39128,74.75171,2023-10-12 13:28:58,https://evidence.ksp.gov.in/clip/10188.mp4,SUS-1757,,FIR-24709
+CAM-MYS-1189,Mysuru,12.27039,76.63118,2023-07-15 22:44:15,https://evidence.ksp.gov.in/clip/10189.mp4,SUS-1129,,FIR-22369
+CAM-BEN-1190,Bengaluru Urban,13.00161,77.67376,2023-06-28 05:23:34,https://evidence.ksp.gov.in/clip/10190.mp4,,KA-14-AD-3206,
+CAM-MAN-1191,Mangaluru,12.91951,74.89396,2023-06-28 12:22:28,https://evidence.ksp.gov.in/clip/10191.mp4,SUS-1540,,FIR-23278
+CAM-HUB-1192,Hubballi-Dharwad,15.37801,75.07197,2023-10-11 03:57:15,https://evidence.ksp.gov.in/clip/10192.mp4,,KA-14-JJ-3816,
+CAM-UDU-1193,Udupi,13.36753,74.73874,2023-02-22 00:29:01,https://evidence.ksp.gov.in/clip/10193.mp4,SUS-1104,,FIR-24496
+CAM-MYS-1194,Mysuru,12.40882,76.68236,2023-09-03 21:35:27,https://evidence.ksp.gov.in/clip/10194.mp4,SUS-1734,KA-05-DC-2369,FIR-22127
+CAM-BEN-1195,Bengaluru Urban,12.92967,77.63669,2023-07-06 00:26:05,https://evidence.ksp.gov.in/clip/10195.mp4,,,
+CAM-MAN-1196,Mangaluru,12.87085,74.77188,2023-08-12 06:27:40,https://evidence.ksp.gov.in/clip/10196.mp4,SUS-1010,KA-20-AJ-9170,FIR-22932
+CAM-BEL-1197,Belagavi,15.90508,74.45383,2023-10-08 21:27:32,https://evidence.ksp.gov.in/clip/10197.mp4,SUS-1056,KA-19-RE-1913,FIR-23603
+CAM-MYS-1198,Mysuru,12.30099,76.6077,2023-07-31 19:11:04,https://evidence.ksp.gov.in/clip/10198.mp4,SUS-1544,KA-21-QF-2130,FIR-20013
+CAM-MYS-1199,Mysuru,12.15301,76.59657,2023-01-16 23:57:31,https://evidence.ksp.gov.in/clip/10199.mp4,,KA-51-PF-3962,
+CAM-DAK-1200,Dakshina Kannada,12.88106,75.11602,2023-08-04 14:37:02,https://evidence.ksp.gov.in/clip/10200.mp4,SUS-1776,KA-14-MA-6921,FIR-21133
+CAM-DAK-1201,Dakshina Kannada,12.93013,75.10175,2023-07-15 16:38:58,https://evidence.ksp.gov.in/clip/10201.mp4,,,
+CAM-HUB-1202,Hubballi-Dharwad,15.4081,75.09585,2023-08-05 17:37:03,https://evidence.ksp.gov.in/clip/10202.mp4,,,
+CAM-BEN-1203,Bengaluru Urban,13.02658,77.65281,2023-04-03 09:40:59,https://evidence.ksp.gov.in/clip/10203.mp4,SUS-1167,,FIR-21932
+CAM-HUB-1204,Hubballi-Dharwad,15.39482,74.99907,2023-04-05 17:26:00,https://evidence.ksp.gov.in/clip/10204.mp4,SUS-1768,,FIR-24418
+CAM-BEN-1205,Bengaluru Urban,13.06813,77.66971,2023-08-20 22:44:25,https://evidence.ksp.gov.in/clip/10205.mp4,SUS-1217,KA-25-PG-8024,FIR-22479
+CAM-DAK-1206,Dakshina Kannada,12.96257,75.08696,2023-04-21 16:58:47,https://evidence.ksp.gov.in/clip/10206.mp4,SUS-1708,KA-25-HC-7683,FIR-22549
+CAM-TUM-1207,Tumakuru,13.46485,77.1846,2023-01-20 15:04:14,https://evidence.ksp.gov.in/clip/10207.mp4,SUS-1722,,FIR-23106
+CAM-MAN-1208,Mangaluru,12.86262,74.84571,2023-10-19 17:06:53,https://evidence.ksp.gov.in/clip/10208.mp4,,,
+CAM-UDU-1209,Udupi,13.26926,74.7652,2023-11-22 05:50:28,https://evidence.ksp.gov.in/clip/10209.mp4,SUS-1527,,FIR-21505
+CAM-BEN-1210,Bengaluru Urban,12.94793,77.54086,2023-06-24 02:13:40,https://evidence.ksp.gov.in/clip/10210.mp4,,KA-14-KG-3878,
+CAM-MYS-1211,Mysuru,12.33705,76.67009,2023-02-06 23:33:46,https://evidence.ksp.gov.in/clip/10211.mp4,SUS-1035;SUS-1193,KA-55-GB-1045,FIR-24654
+CAM-BEN-1212,Bengaluru Urban,13.00023,77.54612,2023-11-11 15:28:48,https://evidence.ksp.gov.in/clip/10212.mp4,,,
+CAM-BEL-1213,Belagavi,15.92828,74.48556,2023-06-27 11:26:31,https://evidence.ksp.gov.in/clip/10213.mp4,SUS-1301,KA-21-QG-6535,FIR-23174
+CAM-HUB-1214,Hubballi-Dharwad,15.32167,75.11587,2023-12-25 21:44:31,https://evidence.ksp.gov.in/clip/10214.mp4,SUS-1106,,FIR-22301
+CAM-BEN-1215,Bengaluru Urban,12.95983,77.59379,2023-01-19 21:41:46,https://evidence.ksp.gov.in/clip/10215.mp4,SUS-1573;SUS-1082,,FIR-23707
+CAM-HUB-1216,Hubballi-Dharwad,15.37642,75.14409,2023-09-19 04:20:46,https://evidence.ksp.gov.in/clip/10216.mp4,,KA-14-QF-9335,
+CAM-BEN-1217,Bengaluru Urban,12.86308,77.56905,2023-06-04 01:05:14,https://evidence.ksp.gov.in/clip/10217.mp4,SUS-1389,,FIR-21027
+CAM-BEN-1218,Bengaluru Urban,13.09191,77.53938,2023-08-29 04:04:36,https://evidence.ksp.gov.in/clip/10218.mp4,SUS-1067,,FIR-21251
+CAM-BEN-1219,Bengaluru Urban,12.95759,77.62476,2023-05-16 18:22:08,https://evidence.ksp.gov.in/clip/10219.mp4,SUS-1291,,FIR-22566
+CAM-MAN-1220,Mangaluru,12.82974,74.88551,2023-04-03 06:58:02,https://evidence.ksp.gov.in/clip/10220.mp4,,,
+CAM-MAN-1221,Mangaluru,12.99257,74.74403,2023-05-05 23:10:56,https://evidence.ksp.gov.in/clip/10221.mp4,SUS-1395,,FIR-21523
+CAM-BEL-1222,Belagavi,15.92792,74.59462,2023-04-25 15:45:00,https://evidence.ksp.gov.in/clip/10222.mp4,SUS-1225,,FIR-21688
+CAM-MYS-1223,Mysuru,12.28299,76.7033,2023-04-10 21:52:56,https://evidence.ksp.gov.in/clip/10223.mp4,,KA-51-FJ-5952,
+CAM-SHI-1224,Shivamogga,13.98695,75.63268,2023-01-15 02:42:42,https://evidence.ksp.gov.in/clip/10224.mp4,SUS-1682,KA-55-HC-4845,FIR-23416
+CAM-DAK-1225,Dakshina Kannada,12.84785,75.17524,2023-02-06 06:25:54,https://evidence.ksp.gov.in/clip/10225.mp4,SUS-1553,KA-19-CB-7900,FIR-20770
+CAM-UDU-1226,Udupi,13.45634,74.75827,2023-08-12 23:53:51,https://evidence.ksp.gov.in/clip/10226.mp4,,,
+CAM-BEN-1227,Bengaluru Urban,12.98265,77.5265,2023-04-09 12:11:30,https://evidence.ksp.gov.in/clip/10227.mp4,SUS-1707,,FIR-22672
+CAM-BEL-1228,Belagavi,15.87775,74.41349,2023-03-31 21:30:53,https://evidence.ksp.gov.in/clip/10228.mp4,SUS-1513,KA-22-AJ-6245,FIR-21291
+CAM-BEN-1229,Bengaluru Urban,12.93575,77.57237,2023-10-12 13:55:56,https://evidence.ksp.gov.in/clip/10229.mp4,,KA-19-HA-6029,
+CAM-BEN-1230,Bengaluru Urban,13.01828,77.56423,2023-12-06 12:02:41,https://evidence.ksp.gov.in/clip/10230.mp4,SUS-1462,,FIR-21556
+CAM-SHI-1231,Shivamogga,13.93707,75.52637,2023-03-11 14:53:17,https://evidence.ksp.gov.in/clip/10231.mp4,,KA-19-NF-4545,
+CAM-MAN-1232,Mangaluru,12.92986,74.8146,2023-01-16 10:25:08,https://evidence.ksp.gov.in/clip/10232.mp4,SUS-1382;SUS-1590,,FIR-20449
+CAM-UDU-1233,Udupi,13.29194,74.73839,2023-01-29 08:09:28,https://evidence.ksp.gov.in/clip/10233.mp4,,KA-03-CF-9002,
+CAM-BEL-1234,Belagavi,15.83986,74.56216,2023-02-21 00:50:48,https://evidence.ksp.gov.in/clip/10234.mp4,SUS-1611;SUS-1698,,FIR-21741
+CAM-BEN-1235,Bengaluru Urban,12.97537,77.63893,2023-04-28 08:36:59,https://evidence.ksp.gov.in/clip/10235.mp4,,,
+CAM-MYS-1236,Mysuru,12.29431,76.71247,2023-05-28 17:22:48,https://evidence.ksp.gov.in/clip/10236.mp4,,,
+CAM-MAN-1237,Mangaluru,13.00968,74.86954,2023-02-16 20:00:55,https://evidence.ksp.gov.in/clip/10237.mp4,,KA-01-KG-4812,
+CAM-HUB-1238,Hubballi-Dharwad,15.33744,75.1329,2023-01-21 19:41:35,https://evidence.ksp.gov.in/clip/10238.mp4,SUS-1153,,FIR-24533
+CAM-HUB-1239,Hubballi-Dharwad,15.35521,75.18372,2023-03-29 01:54:07,https://evidence.ksp.gov.in/clip/10239.mp4,SUS-1246,,FIR-20982
+CAM-MAN-1240,Mangaluru,12.87221,74.91173,2023-10-13 12:40:24,https://evidence.ksp.gov.in/clip/10240.mp4,SUS-1616,KA-51-DC-4026,FIR-23749
+CAM-DAK-1241,Dakshina Kannada,12.90535,75.12657,2023-01-21 05:28:22,https://evidence.ksp.gov.in/clip/10241.mp4,,KA-05-DE-4833,
+CAM-DAK-1242,Dakshina Kannada,12.89648,75.16286,2023-04-22 18:23:29,https://evidence.ksp.gov.in/clip/10242.mp4,,KA-51-NJ-6994,
+CAM-MAN-1243,Mangaluru,12.93798,74.81935,2023-05-22 11:30:59,https://evidence.ksp.gov.in/clip/10243.mp4,SUS-1261,,FIR-22495
+CAM-BEN-1244,Bengaluru Urban,12.9258,77.6278,2023-03-29 07:54:45,https://evidence.ksp.gov.in/clip/10244.mp4,SUS-1158,,FIR-23300
+CAM-MYS-1245,Mysuru,12.29522,76.67175,2023-09-10 10:24:46,https://evidence.ksp.gov.in/clip/10245.mp4,,,
+CAM-BEN-1246,Bengaluru Urban,12.96589,77.66598,2023-02-21 07:57:42,https://evidence.ksp.gov.in/clip/10246.mp4,SUS-1517,,FIR-24813
+CAM-BEL-1247,Belagavi,15.78416,74.46812,2023-12-17 15:57:48,https://evidence.ksp.gov.in/clip/10247.mp4,SUS-1793;SUS-1169,,FIR-21707
+CAM-BEN-1248,Bengaluru Urban,12.93598,77.66138,2023-02-03 01:56:36,https://evidence.ksp.gov.in/clip/10248.mp4,,,
+CAM-UDU-1249,Udupi,13.30748,74.6997,2023-11-04 02:29:19,https://evidence.ksp.gov.in/clip/10249.mp4,,,
+CAM-MYS-1250,Mysuru,12.34944,76.66139,2023-01-27 13:43:39,https://evidence.ksp.gov.in/clip/10250.mp4,SUS-1629;SUS-1611,KA-06-BB-3775,FIR-21597
+CAM-HUB-1251,Hubballi-Dharwad,15.37911,75.08669,2023-06-20 18:53:11,https://evidence.ksp.gov.in/clip/10251.mp4,SUS-1289,KA-02-GB-5357,FIR-22312
+CAM-BEN-1252,Bengaluru Urban,13.03593,77.61507,2023-07-12 08:39:17,https://evidence.ksp.gov.in/clip/10252.mp4,SUS-1240,,FIR-24574
+CAM-MYS-1253,Mysuru,12.27783,76.68948,2023-12-13 06:42:05,https://evidence.ksp.gov.in/clip/10253.mp4,SUS-1419,,FIR-20913
+CAM-MAN-1254,Mangaluru,12.9269,74.82427,2023-07-20 03:38:59,https://evidence.ksp.gov.in/clip/10254.mp4,,KA-09-EG-7008,
+CAM-DAK-1255,Dakshina Kannada,12.90637,75.05872,2023-12-25 11:58:17,https://evidence.ksp.gov.in/clip/10255.mp4,,,
+CAM-HUB-1256,Hubballi-Dharwad,15.38274,75.01149,2023-11-12 18:12:10,https://evidence.ksp.gov.in/clip/10256.mp4,SUS-1135,KA-25-NF-6226,FIR-21905
+CAM-DAK-1257,Dakshina Kannada,12.82169,75.18037,2023-02-28 09:34:51,https://evidence.ksp.gov.in/clip/10257.mp4,SUS-1078,KA-02-ED-3584,FIR-22410
+CAM-UDU-1258,Udupi,13.36073,74.73603,2023-10-20 23:56:41,https://evidence.ksp.gov.in/clip/10258.mp4,,,
+CAM-BEN-1259,Bengaluru Urban,12.99731,77.62369,2023-01-10 12:56:25,https://evidence.ksp.gov.in/clip/10259.mp4,SUS-1215,KA-25-BH-3653,FIR-24375
+CAM-TUM-1260,Tumakuru,13.2769,77.15633,2023-11-20 02:05:46,https://evidence.ksp.gov.in/clip/10260.mp4,SUS-1421,,FIR-20971
+CAM-BEN-1261,Bengaluru Urban,13.05451,77.58986,2023-03-03 08:30:47,https://evidence.ksp.gov.in/clip/10261.mp4,,,
+CAM-BEN-1262,Bengaluru Urban,12.93849,77.64003,2023-08-07 15:28:51,https://evidence.ksp.gov.in/clip/10262.mp4,SUS-1102,,FIR-20480
+CAM-BEN-1263,Bengaluru Urban,13.02767,77.6137,2023-07-30 13:37:32,https://evidence.ksp.gov.in/clip/10263.mp4,,,
+CAM-MYS-1264,Mysuru,12.27506,76.66061,2023-12-29 08:24:48,https://evidence.ksp.gov.in/clip/10264.mp4,,,
+CAM-SHI-1265,Shivamogga,14.03603,75.62431,2023-01-13 01:13:13,https://evidence.ksp.gov.in/clip/10265.mp4,SUS-1054,KA-21-GE-4355,FIR-20989
+CAM-BEN-1266,Bengaluru Urban,12.89819,77.57707,2023-08-22 23:16:18,https://evidence.ksp.gov.in/clip/10266.mp4,SUS-1406;SUS-1471,KA-49-LG-3886,FIR-22767
+CAM-MAN-1267,Mangaluru,12.91588,74.7897,2023-09-28 18:27:12,https://evidence.ksp.gov.in/clip/10267.mp4,,,
+CAM-MYS-1268,Mysuru,12.22817,76.71456,2023-11-29 05:22:25,https://evidence.ksp.gov.in/clip/10268.mp4,SUS-1083,KA-51-FJ-5952,FIR-21866
+CAM-BAL-1269,Ballari,15.18881,76.93467,2023-02-09 18:35:25,https://evidence.ksp.gov.in/clip/10269.mp4,SUS-1597,,FIR-24595
+CAM-HUB-1270,Hubballi-Dharwad,15.44589,75.07227,2023-10-18 01:25:08,https://evidence.ksp.gov.in/clip/10270.mp4,SUS-1524,,FIR-23838
+CAM-MYS-1271,Mysuru,12.35134,76.66777,2023-07-18 07:50:51,https://evidence.ksp.gov.in/clip/10271.mp4,SUS-1521,,FIR-24356
+CAM-BEN-1272,Bengaluru Urban,12.94176,77.59514,2023-03-16 12:04:45,https://evidence.ksp.gov.in/clip/10272.mp4,SUS-1703,,FIR-20726
+CAM-BEN-1273,Bengaluru Urban,13.041,77.56364,2023-07-29 03:56:05,https://evidence.ksp.gov.in/clip/10273.mp4,SUS-1529,,FIR-21513
+CAM-BEN-1274,Bengaluru Urban,12.98,77.60976,2023-12-16 23:11:48,https://evidence.ksp.gov.in/clip/10274.mp4,SUS-1783;SUS-1224,KA-09-KD-9396,FIR-24187
+CAM-BEN-1275,Bengaluru Urban,13.00791,77.55865,2023-01-28 12:10:03,https://evidence.ksp.gov.in/clip/10275.mp4,,,
+CAM-UDU-1276,Udupi,13.34122,74.63871,2023-02-19 03:50:19,https://evidence.ksp.gov.in/clip/10276.mp4,SUS-1335,,FIR-21201
+CAM-HUB-1277,Hubballi-Dharwad,15.39875,75.17641,2023-03-01 08:35:03,https://evidence.ksp.gov.in/clip/10277.mp4,SUS-1207;SUS-1182,,FIR-20174
+CAM-HUB-1278,Hubballi-Dharwad,15.34408,75.11924,2023-10-31 00:34:39,https://evidence.ksp.gov.in/clip/10278.mp4,SUS-1227,KA-25-CD-5661,FIR-22946
+CAM-MAN-1279,Mangaluru,12.89786,74.72362,2023-06-24 05:22:52,https://evidence.ksp.gov.in/clip/10279.mp4,SUS-1047,KA-14-LB-8284,FIR-20358
+CAM-MYS-1280,Mysuru,12.30226,76.63006,2023-04-16 12:34:06,https://evidence.ksp.gov.in/clip/10280.mp4,SUS-1397,,FIR-20870
+CAM-UDU-1281,Udupi,13.33956,74.68958,2023-11-08 03:14:29,https://evidence.ksp.gov.in/clip/10281.mp4,,,
+CAM-BEL-1282,Belagavi,15.846,74.5009,2023-08-17 06:33:45,https://evidence.ksp.gov.in/clip/10282.mp4,,KA-06-MJ-9764,
+CAM-MYS-1283,Mysuru,12.29713,76.64813,2023-01-15 10:50:31,https://evidence.ksp.gov.in/clip/10283.mp4,,,
+CAM-MAN-1284,Mangaluru,13.01127,74.84533,2023-07-09 12:54:15,https://evidence.ksp.gov.in/clip/10284.mp4,SUS-1402,,FIR-24702
+CAM-MYS-1285,Mysuru,12.25543,76.58131,2023-11-10 13:02:27,https://evidence.ksp.gov.in/clip/10285.mp4,SUS-1450,,FIR-23030
+CAM-BEN-1286,Bengaluru Urban,12.92052,77.66794,2023-09-30 06:30:46,https://evidence.ksp.gov.in/clip/10286.mp4,SUS-1165,,FIR-21822
+CAM-TUM-1287,Tumakuru,13.31893,77.12759,2023-02-02 00:12:54,https://evidence.ksp.gov.in/clip/10287.mp4,SUS-1537,KA-19-MD-9390,FIR-24775
+CAM-HUB-1288,Hubballi-Dharwad,15.36389,75.14932,2023-02-14 14:48:31,https://evidence.ksp.gov.in/clip/10288.mp4,,,
+CAM-BEN-1289,Bengaluru Urban,13.02297,77.57248,2023-11-23 20:55:36,https://evidence.ksp.gov.in/clip/10289.mp4,,KA-51-HB-7469,
+CAM-BEN-1290,Bengaluru Urban,13.02692,77.6096,2023-10-03 05:56:01,https://evidence.ksp.gov.in/clip/10290.mp4,SUS-1276,KA-14-LE-2765,FIR-23197
+CAM-BEL-1291,Belagavi,15.88005,74.47569,2023-02-25 10:48:03,https://evidence.ksp.gov.in/clip/10291.mp4,,,
+CAM-HUB-1292,Hubballi-Dharwad,15.39044,75.1688,2023-08-05 01:45:04,https://evidence.ksp.gov.in/clip/10292.mp4,SUS-1744,KA-25-CA-8405,FIR-22049
+CAM-BEN-1293,Bengaluru Urban,12.97073,77.63091,2023-04-25 19:42:22,https://evidence.ksp.gov.in/clip/10293.mp4,SUS-1512,KA-09-CH-3963,FIR-20723
+CAM-UDU-1294,Udupi,13.40099,74.78997,2023-06-30 17:47:44,https://evidence.ksp.gov.in/clip/10294.mp4,SUS-1323,KA-49-AE-6508,FIR-23509
+CAM-BEL-1295,Belagavi,15.80689,74.54488,2023-05-05 12:48:55,https://evidence.ksp.gov.in/clip/10295.mp4,,,
+CAM-BEN-1296,Bengaluru Urban,12.96826,77.48857,2023-01-11 10:52:34,https://evidence.ksp.gov.in/clip/10296.mp4,SUS-1705,,FIR-24278
+CAM-BEN-1297,Bengaluru Urban,12.87146,77.67432,2023-09-07 02:46:55,https://evidence.ksp.gov.in/clip/10297.mp4,SUS-1583,KA-19-BF-7862,FIR-23008
+CAM-SHI-1298,Shivamogga,13.90739,75.59764,2023-04-25 19:33:50,https://evidence.ksp.gov.in/clip/10298.mp4,SUS-1140,KA-55-HB-4492,FIR-22777
+CAM-UDU-1299,Udupi,13.34935,74.74708,2023-11-21 02:21:01,https://evidence.ksp.gov.in/clip/10299.mp4,SUS-1643,,FIR-24975
+CAM-BEN-1300,Bengaluru Urban,12.93237,77.60825,2023-11-09 06:32:08,https://evidence.ksp.gov.in/clip/10300.mp4,SUS-1758,KA-02-JA-4774,FIR-24231
+CAM-BEL-1301,Belagavi,15.86155,74.5332,2023-01-16 11:12:47,https://evidence.ksp.gov.in/clip/10301.mp4,SUS-1346;SUS-1184,KA-34-DC-1109,FIR-24939
+CAM-BEN-1302,Bengaluru Urban,12.9205,77.62284,2023-07-06 00:26:05,https://evidence.ksp.gov.in/clip/10302.mp4,SUS-1224,KA-05-CG-3440,FIR-21969
+CAM-MYS-1303,Mysuru,12.27949,76.63579,2023-02-22 02:50:02,https://evidence.ksp.gov.in/clip/10303.mp4,SUS-1352,,FIR-23443
+CAM-MAN-1304,Mangaluru,12.80128,74.83133,2023-01-13 11:11:45,https://evidence.ksp.gov.in/clip/10304.mp4,SUS-1407,KA-25-LA-5462,FIR-20130
+CAM-BEN-1305,Bengaluru Urban,12.99315,77.55125,2023-10-03 13:23:48,https://evidence.ksp.gov.in/clip/10305.mp4,SUS-1736,,FIR-22883
+CAM-MYS-1306,Mysuru,12.28282,76.70159,2023-11-02 09:53:39,https://evidence.ksp.gov.in/clip/10306.mp4,SUS-1625,,FIR-22661
+CAM-MYS-1307,Mysuru,12.32096,76.65558,2023-12-01 19:26:51,https://evidence.ksp.gov.in/clip/10307.mp4,SUS-1400,,FIR-22221
+CAM-UDU-1308,Udupi,13.36471,74.74993,2023-06-03 15:33:23,https://evidence.ksp.gov.in/clip/10308.mp4,,KA-19-LJ-4153,
+CAM-BEN-1309,Bengaluru Urban,12.92584,77.5973,2023-01-03 23:38:55,https://evidence.ksp.gov.in/clip/10309.mp4,SUS-1570,,FIR-22184
+CAM-BEN-1310,Bengaluru Urban,13.00296,77.58899,2023-12-09 00:13:45,https://evidence.ksp.gov.in/clip/10310.mp4,SUS-1717,,FIR-23383
+CAM-BEN-1311,Bengaluru Urban,12.92727,77.6407,2023-03-29 07:54:45,https://evidence.ksp.gov.in/clip/10311.mp4,,KA-03-RE-6023,
+CAM-MYS-1312,Mysuru,12.28071,76.66995,2023-04-07 03:22:38,https://evidence.ksp.gov.in/clip/10312.mp4,SUS-1495,,FIR-24673
+CAM-BEN-1313,Bengaluru Urban,12.94282,77.59188,2023-06-09 12:53:16,https://evidence.ksp.gov.in/clip/10313.mp4,SUS-1528,KA-09-QB-6645,FIR-22928
+CAM-BEN-1314,Bengaluru Urban,12.98325,77.62542,2023-07-09 17:52:32,https://evidence.ksp.gov.in/clip/10314.mp4,SUS-1264,,FIR-21132
+CAM-BEN-1315,Bengaluru Urban,12.9571,77.56079,2023-04-29 02:38:46,https://evidence.ksp.gov.in/clip/10315.mp4,SUS-1039,KA-09-MG-4546,FIR-22962
+CAM-HUB-1316,Hubballi-Dharwad,15.37793,75.18081,2023-07-07 11:45:09,https://evidence.ksp.gov.in/clip/10316.mp4,SUS-1082,,FIR-24376
+CAM-UDU-1317,Udupi,13.25086,74.74804,2023-06-14 13:08:45,https://evidence.ksp.gov.in/clip/10317.mp4,,KA-14-CB-7128,
+CAM-BEL-1318,Belagavi,15.92229,74.53778,2023-04-27 19:03:59,https://evidence.ksp.gov.in/clip/10318.mp4,SUS-1063,KA-41-FE-5610,FIR-23778
+CAM-MYS-1319,Mysuru,12.27815,76.62544,2023-06-15 13:09:29,https://evidence.ksp.gov.in/clip/10319.mp4,SUS-1203,,FIR-21972
+CAM-BEN-1320,Bengaluru Urban,12.923,77.59785,2023-10-31 20:22:14,https://evidence.ksp.gov.in/clip/10320.mp4,SUS-1318,,FIR-20615
+CAM-BEN-1321,Bengaluru Urban,13.04621,77.6216,2023-02-05 02:23:47,https://evidence.ksp.gov.in/clip/10321.mp4,SUS-1317;SUS-1261,,FIR-21605
+CAM-HUB-1322,Hubballi-Dharwad,15.342,75.17287,2023-03-25 00:16:09,https://evidence.ksp.gov.in/clip/10322.mp4,SUS-1641,KA-55-QA-5696,FIR-20388
+CAM-BEN-1323,Bengaluru Urban,12.9017,77.68919,2023-08-18 16:25:54,https://evidence.ksp.gov.in/clip/10323.mp4,SUS-1254,,FIR-22320
+CAM-HUB-1324,Hubballi-Dharwad,15.43864,75.10417,2023-08-17 23:13:37,https://evidence.ksp.gov.in/clip/10324.mp4,SUS-1329,,FIR-24864
+CAM-BAL-1325,Ballari,15.21168,76.81398,2023-05-29 01:19:54,https://evidence.ksp.gov.in/clip/10325.mp4,SUS-1037,,FIR-21541
+CAM-HUB-1326,Hubballi-Dharwad,15.35767,75.11872,2023-07-10 02:05:09,https://evidence.ksp.gov.in/clip/10326.mp4,SUS-1533,,FIR-24678
+CAM-TUM-1327,Tumakuru,13.31368,77.20608,2023-10-06 23:37:38,https://evidence.ksp.gov.in/clip/10327.mp4,SUS-1120,,FIR-23049
+CAM-TUM-1328,Tumakuru,13.32024,77.21038,2023-09-25 10:56:38,https://evidence.ksp.gov.in/clip/10328.mp4,SUS-1326,KA-02-RA-8535,FIR-21335
+CAM-BEN-1329,Bengaluru Urban,13.01801,77.66783,2023-04-08 15:15:07,https://evidence.ksp.gov.in/clip/10329.mp4,SUS-1539,,FIR-21167
+CAM-BEN-1330,Bengaluru Urban,12.96937,77.59131,2023-10-13 03:14:15,https://evidence.ksp.gov.in/clip/10330.mp4,,,
+CAM-MYS-1331,Mysuru,12.30675,76.76884,2023-12-12 03:30:46,https://evidence.ksp.gov.in/clip/10331.mp4,,,
+CAM-HUB-1332,Hubballi-Dharwad,15.40761,75.00088,2023-05-20 12:32:30,https://evidence.ksp.gov.in/clip/10332.mp4,,KA-20-QG-6588,
+CAM-BEN-1333,Bengaluru Urban,13.00329,77.60715,2023-04-12 19:31:17,https://evidence.ksp.gov.in/clip/10333.mp4,,,
+CAM-DAK-1334,Dakshina Kannada,12.90804,75.11791,2023-04-14 02:55:22,https://evidence.ksp.gov.in/clip/10334.mp4,,KA-41-QF-9012,
+CAM-TUM-1335,Tumakuru,13.41665,77.18446,2023-02-22 15:46:48,https://evidence.ksp.gov.in/clip/10335.mp4,SUS-1183,KA-20-BJ-2552,FIR-24655
+CAM-MYS-1336,Mysuru,12.30023,76.71701,2023-04-19 15:22:01,https://evidence.ksp.gov.in/clip/10336.mp4,SUS-1416;SUS-1420,,FIR-21858
+CAM-BEN-1337,Bengaluru Urban,12.92541,77.63165,2023-10-22 16:35:50,https://evidence.ksp.gov.in/clip/10337.mp4,SUS-1687,,FIR-20039
+CAM-MYS-1338,Mysuru,12.29179,76.57345,2023-05-24 07:31:11,https://evidence.ksp.gov.in/clip/10338.mp4,SUS-1034,KA-03-LH-9420,FIR-21153
+CAM-BEL-1339,Belagavi,15.83212,74.49448,2023-12-24 17:51:22,https://evidence.ksp.gov.in/clip/10339.mp4,SUS-1384,,FIR-22219
+CAM-BEN-1340,Bengaluru Urban,12.9902,77.54557,2023-10-09 01:41:11,https://evidence.ksp.gov.in/clip/10340.mp4,SUS-1517,,FIR-22404
+CAM-BAL-1341,Ballari,15.20115,76.89593,2023-06-12 10:16:15,https://evidence.ksp.gov.in/clip/10341.mp4,SUS-1745,,FIR-24508
+CAM-SHI-1342,Shivamogga,13.9418,75.57618,2023-05-30 07:38:11,https://evidence.ksp.gov.in/clip/10342.mp4,SUS-1447,,FIR-22341
+CAM-MYS-1343,Mysuru,12.25037,76.66751,2023-03-12 00:10:19,https://evidence.ksp.gov.in/clip/10343.mp4,SUS-1140,KA-03-PH-6899,FIR-22451
+CAM-UDU-1344,Udupi,13.36883,74.73816,2023-09-21 11:57:00,https://evidence.ksp.gov.in/clip/10344.mp4,SUS-1395,,FIR-22173
+CAM-BEN-1345,Bengaluru Urban,13.00635,77.5024,2023-10-10 11:52:44,https://evidence.ksp.gov.in/clip/10345.mp4,SUS-1354,,FIR-23264
+CAM-BEN-1346,Bengaluru Urban,13.0306,77.52866,2023-03-25 02:11:07,https://evidence.ksp.gov.in/clip/10346.mp4,SUS-1088,KA-22-MG-7246,FIR-20883
+CAM-HUB-1347,Hubballi-Dharwad,15.32906,75.09735,2023-11-19 23:58:28,https://evidence.ksp.gov.in/clip/10347.mp4,SUS-1573,,FIR-22331
+CAM-TUM-1348,Tumakuru,13.30494,77.00007,2023-02-09 00:47:43,https://evidence.ksp.gov.in/clip/10348.mp4,SUS-1635,,FIR-21612
+CAM-HUB-1349,Hubballi-Dharwad,15.32796,75.12439,2023-09-05 10:19:37,https://evidence.ksp.gov.in/clip/10349.mp4,SUS-1536,,FIR-20551
+CAM-BAL-1350,Ballari,15.15481,76.88029,2023-12-23 12:50:07,https://evidence.ksp.gov.in/clip/10350.mp4,SUS-1184,,FIR-23985
+CAM-BEN-1351,Bengaluru Urban,12.99634,77.59468,2023-09-22 18:01:20,https://evidence.ksp.gov.in/clip/10351.mp4,SUS-1685,KA-49-NF-3992,FIR-24275
+CAM-DAK-1352,Dakshina Kannada,12.88597,75.15541,2023-03-11 09:09:22,https://evidence.ksp.gov.in/clip/10352.mp4,,,
+CAM-MAN-1353,Mangaluru,12.93044,74.87504,2023-05-14 21:47:31,https://evidence.ksp.gov.in/clip/10353.mp4,,,
+CAM-MYS-1354,Mysuru,12.28608,76.65637,2023-05-24 09:20:32,https://evidence.ksp.gov.in/clip/10354.mp4,SUS-1765,KA-19-JD-6454,FIR-20570
+CAM-DAK-1355,Dakshina Kannada,12.92797,75.07804,2023-06-04 08:48:47,https://evidence.ksp.gov.in/clip/10355.mp4,,KA-34-PE-6897,
+CAM-SHI-1356,Shivamogga,13.83487,75.55183,2023-09-22 21:19:20,https://evidence.ksp.gov.in/clip/10356.mp4,SUS-1603,,FIR-20587
+CAM-BEN-1357,Bengaluru Urban,12.99448,77.61602,2023-06-09 17:57:10,https://evidence.ksp.gov.in/clip/10357.mp4,SUS-1638,,FIR-23967
+CAM-MYS-1358,Mysuru,12.27273,76.65266,2023-01-11 22:43:37,https://evidence.ksp.gov.in/clip/10358.mp4,SUS-1110,KA-51-GB-8924,FIR-22579
+CAM-DAK-1359,Dakshina Kannada,12.88809,75.10487,2023-03-19 17:47:50,https://evidence.ksp.gov.in/clip/10359.mp4,SUS-1580,KA-05-AH-6869,FIR-22866
+CAM-BEN-1360,Bengaluru Urban,13.03205,77.5199,2023-08-23 11:01:08,https://evidence.ksp.gov.in/clip/10360.mp4,SUS-1424,KA-41-ED-4928,FIR-21351
+CAM-HUB-1361,Hubballi-Dharwad,15.39283,75.07401,2023-08-29 13:03:14,https://evidence.ksp.gov.in/clip/10361.mp4,,,
+CAM-BEN-1362,Bengaluru Urban,13.01248,77.62478,2023-04-25 21:43:49,https://evidence.ksp.gov.in/clip/10362.mp4,,,
+CAM-BEL-1363,Belagavi,15.89636,74.58256,2023-02-21 10:35:04,https://evidence.ksp.gov.in/clip/10363.mp4,,KA-14-LA-9292,
+CAM-DAK-1364,Dakshina Kannada,12.82505,75.20376,2023-03-02 09:10:26,https://evidence.ksp.gov.in/clip/10364.mp4,SUS-1184,KA-14-LH-9855,FIR-20046
+CAM-BAL-1365,Ballari,15.0798,76.90716,2023-05-15 07:38:39,https://evidence.ksp.gov.in/clip/10365.mp4,SUS-1051,,FIR-24099
+CAM-BEN-1366,Bengaluru Urban,12.99508,77.65576,2023-09-26 03:20:31,https://evidence.ksp.gov.in/clip/10366.mp4,SUS-1369,,FIR-24371
+CAM-TUM-1367,Tumakuru,13.33227,77.13228,2023-06-17 05:13:59,https://evidence.ksp.gov.in/clip/10367.mp4,SUS-1264,,FIR-23980
+CAM-BEN-1368,Bengaluru Urban,12.96365,77.53091,2023-11-10 19:39:57,https://evidence.ksp.gov.in/clip/10368.mp4,SUS-1069,,FIR-24967
+CAM-TUM-1369,Tumakuru,13.34368,77.1517,2023-02-11 22:16:37,https://evidence.ksp.gov.in/clip/10369.mp4,SUS-1595,KA-25-BH-3653,FIR-21974
+CAM-BEN-1370,Bengaluru Urban,12.97356,77.67032,2023-02-21 07:57:42,https://evidence.ksp.gov.in/clip/10370.mp4,SUS-1525,,FIR-24813
+CAM-BEN-1371,Bengaluru Urban,12.96342,77.66114,2023-12-06 14:54:20,https://evidence.ksp.gov.in/clip/10371.mp4,,,
+CAM-BEN-1372,Bengaluru Urban,13.00012,77.64808,2023-09-12 18:52:23,https://evidence.ksp.gov.in/clip/10372.mp4,,,
+CAM-HUB-1373,Hubballi-Dharwad,15.47456,75.13159,2023-08-18 04:52:49,https://evidence.ksp.gov.in/clip/10373.mp4,SUS-1417,KA-34-PG-6870,FIR-21552
+CAM-TUM-1374,Tumakuru,13.29459,77.18059,2023-03-14 06:05:36,https://evidence.ksp.gov.in/clip/10374.mp4,SUS-1443;SUS-1506,KA-25-CB-1284,FIR-22848
+CAM-MYS-1375,Mysuru,12.22788,76.56558,2023-05-26 13:46:19,https://evidence.ksp.gov.in/clip/10375.mp4,SUS-1055,KA-20-HF-1625,FIR-21625
+CAM-SHI-1376,Shivamogga,14.00622,75.61552,2023-10-18 01:10:29,https://evidence.ksp.gov.in/clip/10376.mp4,SUS-1579,,FIR-24357
+CAM-SHI-1377,Shivamogga,13.97732,75.58248,2023-02-19 00:11:27,https://evidence.ksp.gov.in/clip/10377.mp4,SUS-1062;SUS-1311,KA-22-LF-4241,FIR-21986
+CAM-BEN-1378,Bengaluru Urban,12.98367,77.49043,2023-08-19 13:29:38,https://evidence.ksp.gov.in/clip/10378.mp4,SUS-1487;SUS-1196,KA-09-JE-4029,FIR-24799
+CAM-BEN-1379,Bengaluru Urban,12.9994,77.61469,2023-06-10 22:52:12,https://evidence.ksp.gov.in/clip/10379.mp4,SUS-1583,KA-14-PG-7179,FIR-20789
+CAM-BEL-1380,Belagavi,15.93561,74.45954,2023-06-08 07:06:05,https://evidence.ksp.gov.in/clip/10380.mp4,SUS-1732,KA-14-NF-8852,FIR-20886
+CAM-MAN-1381,Mangaluru,12.8291,74.84375,2023-01-27 02:06:36,https://evidence.ksp.gov.in/clip/10381.mp4,SUS-1077,KA-55-GG-2284,FIR-24402
+CAM-TUM-1382,Tumakuru,13.35331,77.14733,2023-06-26 07:52:43,https://evidence.ksp.gov.in/clip/10382.mp4,SUS-1426,,FIR-21297
+CAM-DAK-1383,Dakshina Kannada,12.9577,75.04646,2023-12-20 00:57:34,https://evidence.ksp.gov.in/clip/10383.mp4,SUS-1673;SUS-1235,,FIR-22350
+CAM-BEN-1384,Bengaluru Urban,13.04214,77.59587,2023-09-19 07:12:54,https://evidence.ksp.gov.in/clip/10384.mp4,SUS-1079,KA-06-HF-8369,FIR-21795
+CAM-SHI-1385,Shivamogga,13.94609,75.58109,2023-05-21 09:21:04,https://evidence.ksp.gov.in/clip/10385.mp4,SUS-1263,,FIR-22899
+CAM-DAK-1386,Dakshina Kannada,12.81986,75.10817,2023-08-11 06:00:43,https://evidence.ksp.gov.in/clip/10386.mp4,SUS-1561,,FIR-22912
+CAM-MYS-1387,Mysuru,12.30424,76.58233,2023-07-13 21:50:35,https://evidence.ksp.gov.in/clip/10387.mp4,,,
+CAM-HUB-1388,Hubballi-Dharwad,15.34856,75.10455,2023-04-04 07:58:53,https://evidence.ksp.gov.in/clip/10388.mp4,SUS-1277,,FIR-21135
+CAM-HUB-1389,Hubballi-Dharwad,15.44235,75.18376,2023-07-01 12:32:17,https://evidence.ksp.gov.in/clip/10389.mp4,SUS-1374,KA-14-LB-8284,FIR-22914
+CAM-MYS-1390,Mysuru,12.23518,76.60683,2023-02-23 07:07:15,https://evidence.ksp.gov.in/clip/10390.mp4,SUS-1113,,FIR-22189
+CAM-BEN-1391,Bengaluru Urban,12.94949,77.64347,2023-08-27 19:29:58,https://evidence.ksp.gov.in/clip/10391.mp4,SUS-1059,,FIR-23690
+CAM-BEN-1392,Bengaluru Urban,12.95231,77.53927,2023-07-04 21:30:33,https://evidence.ksp.gov.in/clip/10392.mp4,,,
+CAM-BAL-1393,Ballari,15.17068,76.97981,2023-10-31 10:21:19,https://evidence.ksp.gov.in/clip/10393.mp4,SUS-1307,,FIR-22814
+CAM-BEN-1394,Bengaluru Urban,12.91025,77.55634,2023-12-09 00:18:54,https://evidence.ksp.gov.in/clip/10394.mp4,SUS-1382,KA-09-GC-9080,FIR-20902
+CAM-BEL-1395,Belagavi,15.89198,74.48827,2023-06-14 10:26:00,https://evidence.ksp.gov.in/clip/10395.mp4,SUS-1390,,FIR-22445
+CAM-BEN-1396,Bengaluru Urban,12.89162,77.54603,2023-01-20 15:25:33,https://evidence.ksp.gov.in/clip/10396.mp4,SUS-1429;SUS-1682,KA-19-EG-8698,FIR-21890
+CAM-MYS-1397,Mysuru,12.20617,76.54755,2023-01-29 17:24:18,https://evidence.ksp.gov.in/clip/10397.mp4,,,
+CAM-TUM-1398,Tumakuru,13.30205,77.08364,2023-08-09 07:06:11,https://evidence.ksp.gov.in/clip/10398.mp4,SUS-1515,KA-09-RD-2033,FIR-22825
+CAM-BEN-1399,Bengaluru Urban,12.94608,77.56261,2023-01-17 22:49:20,https://evidence.ksp.gov.in/clip/10399.mp4,SUS-1502,KA-22-MC-7506,FIR-21534
+CAM-BEL-1400,Belagavi,15.79649,74.4674,2023-05-25 23:27:53,https://evidence.ksp.gov.in/clip/10400.mp4,SUS-1799,,FIR-24503
+CAM-TUM-1401,Tumakuru,13.32887,77.07927,2023-06-13 22:48:57,https://evidence.ksp.gov.in/clip/10401.mp4,,,
+CAM-MYS-1402,Mysuru,12.2601,76.60854,2023-07-21 11:32:44,https://evidence.ksp.gov.in/clip/10402.mp4,,KA-14-HG-2228,
+CAM-HUB-1403,Hubballi-Dharwad,15.34406,75.15739,2023-11-14 04:13:33,https://evidence.ksp.gov.in/clip/10403.mp4,SUS-1592,KA-19-JD-6454,FIR-22563
+CAM-BEN-1404,Bengaluru Urban,12.96877,77.61288,2023-10-26 00:12:57,https://evidence.ksp.gov.in/clip/10404.mp4,SUS-1225,,FIR-22188
+CAM-BEN-1405,Bengaluru Urban,13.03485,77.64456,2023-02-17 03:46:23,https://evidence.ksp.gov.in/clip/10405.mp4,,,
+CAM-BEN-1406,Bengaluru Urban,12.98184,77.68361,2023-04-26 12:23:12,https://evidence.ksp.gov.in/clip/10406.mp4,,,
+CAM-MAN-1407,Mangaluru,12.92286,74.82925,2023-05-22 11:30:59,https://evidence.ksp.gov.in/clip/10407.mp4,,KA-34-BH-3881,
+CAM-BEN-1408,Bengaluru Urban,12.95303,77.48778,2023-07-22 15:01:55,https://evidence.ksp.gov.in/clip/10408.mp4,SUS-1767,,FIR-21075
+CAM-BEN-1409,Bengaluru Urban,13.02438,77.59776,2023-06-14 06:42:55,https://evidence.ksp.gov.in/clip/10409.mp4,SUS-1541,,FIR-20403
+CAM-MYS-1410,Mysuru,12.25685,76.58842,2023-01-22 17:22:46,https://evidence.ksp.gov.in/clip/10410.mp4,SUS-1486,KA-25-EF-7755,FIR-20127
+CAM-MYS-1411,Mysuru,12.27439,76.64916,2023-06-15 02:43:44,https://evidence.ksp.gov.in/clip/10411.mp4,,KA-55-AG-2708,
+CAM-BEN-1412,Bengaluru Urban,12.94274,77.58101,2023-10-04 18:57:06,https://evidence.ksp.gov.in/clip/10412.mp4,,KA-20-HG-8398,
+CAM-BEN-1413,Bengaluru Urban,12.9274,77.6351,2023-03-29 07:54:45,https://evidence.ksp.gov.in/clip/10413.mp4,SUS-1527,KA-25-EF-7755,FIR-23300
+CAM-MYS-1414,Mysuru,12.3441,76.66683,2023-12-20 04:17:22,https://evidence.ksp.gov.in/clip/10414.mp4,,KA-22-AA-4930,
+CAM-DAK-1415,Dakshina Kannada,12.83729,75.09629,2023-04-21 15:43:14,https://evidence.ksp.gov.in/clip/10415.mp4,SUS-1348,KA-49-JB-6837,FIR-22501
+CAM-SHI-1416,Shivamogga,13.8781,75.55942,2023-10-10 06:24:04,https://evidence.ksp.gov.in/clip/10416.mp4,,,
+CAM-BAL-1417,Ballari,15.09309,76.90064,2023-05-01 11:58:06,https://evidence.ksp.gov.in/clip/10417.mp4,SUS-1090,,FIR-22255
+CAM-DAK-1418,Dakshina Kannada,12.83624,75.12699,2023-09-04 02:57:28,https://evidence.ksp.gov.in/clip/10418.mp4,,,
+CAM-SHI-1419,Shivamogga,13.97809,75.59616,2023-06-21 06:46:38,https://evidence.ksp.gov.in/clip/10419.mp4,SUS-1221,KA-14-BH-7522,FIR-23248
+CAM-HUB-1420,Hubballi-Dharwad,15.4005,75.09953,2023-08-20 18:29:34,https://evidence.ksp.gov.in/clip/10420.mp4,,,
+CAM-TUM-1421,Tumakuru,13.27775,77.12146,2023-07-25 11:42:11,https://evidence.ksp.gov.in/clip/10421.mp4,,,
+CAM-BEN-1422,Bengaluru Urban,12.98254,77.62685,2023-06-07 16:53:41,https://evidence.ksp.gov.in/clip/10422.mp4,,KA-25-PC-2446,
+CAM-BAL-1423,Ballari,15.06609,76.8558,2023-08-15 19:34:18,https://evidence.ksp.gov.in/clip/10423.mp4,SUS-1246,KA-02-DG-8151,FIR-23888
+CAM-BEL-1424,Belagavi,15.86827,74.51522,2023-02-15 07:29:54,https://evidence.ksp.gov.in/clip/10424.mp4,SUS-1228,KA-55-BE-5367,FIR-21826
+CAM-MYS-1425,Mysuru,12.17421,76.68375,2023-07-02 20:26:08,https://evidence.ksp.gov.in/clip/10425.mp4,,KA-06-AJ-2205,
+CAM-TUM-1426,Tumakuru,13.26925,77.16001,2023-11-20 02:05:46,https://evidence.ksp.gov.in/clip/10426.mp4,SUS-1482,,FIR-20971
+CAM-BEN-1427,Bengaluru Urban,12.93223,77.61534,2023-11-16 01:47:30,https://evidence.ksp.gov.in/clip/10427.mp4,,,
+CAM-MAN-1428,Mangaluru,13.00044,74.90124,2023-11-25 08:49:44,https://evidence.ksp.gov.in/clip/10428.mp4,SUS-1512,,FIR-22879
+CAM-MAN-1429,Mangaluru,12.97817,74.91891,2023-07-13 03:58:02,https://evidence.ksp.gov.in/clip/10429.mp4,SUS-1511,KA-09-RA-3623,FIR-22196
+CAM-SHI-1430,Shivamogga,13.87617,75.51441,2023-02-20 17:13:35,https://evidence.ksp.gov.in/clip/10430.mp4,SUS-1087,,FIR-24734
+CAM-MYS-1431,Mysuru,12.30479,76.58207,2023-06-12 18:32:40,https://evidence.ksp.gov.in/clip/10431.mp4,SUS-1653;SUS-1740,KA-09-PE-3923,FIR-21845
+CAM-UDU-1432,Udupi,13.28195,74.72567,2023-01-29 08:09:28,https://evidence.ksp.gov.in/clip/10432.mp4,SUS-1510,,FIR-23035
+CAM-MYS-1433,Mysuru,12.29751,76.64024,2023-01-15 10:50:31,https://evidence.ksp.gov.in/clip/10433.mp4,SUS-1663,,FIR-21829
+CAM-BEN-1434,Bengaluru Urban,12.99114,77.62768,2023-08-17 16:40:41,https://evidence.ksp.gov.in/clip/10434.mp4,SUS-1262,KA-03-BJ-7812,FIR-22249
+CAM-TUM-1435,Tumakuru,13.3373,77.07769,2023-01-12 08:05:30,https://evidence.ksp.gov.in/clip/10435.mp4,SUS-1089,,FIR-24437
+CAM-BEN-1436,Bengaluru Urban,12.98919,77.53777,2023-06-13 04:01:17,https://evidence.ksp.gov.in/clip/10436.mp4,SUS-1758,,FIR-20894
+CAM-BEL-1437,Belagavi,15.80206,74.52267,2023-08-02 13:02:22,https://evidence.ksp.gov.in/clip/10437.mp4,,KA-03-PH-6899,
+CAM-BEN-1438,Bengaluru Urban,12.91738,77.59787,2023-03-16 12:56:11,https://evidence.ksp.gov.in/clip/10438.mp4,SUS-1349,KA-25-KC-1259,FIR-23990
+CAM-BEN-1439,Bengaluru Urban,12.99982,77.57582,2023-08-28 06:56:43,https://evidence.ksp.gov.in/clip/10439.mp4,SUS-1498,KA-41-FA-8100,FIR-24628
+CAM-BAL-1440,Ballari,14.99759,76.97471,2023-02-24 06:51:11,https://evidence.ksp.gov.in/clip/10440.mp4,SUS-1168,,FIR-23179
+CAM-BEN-1441,Bengaluru Urban,12.98015,77.63129,2023-07-08 00:53:08,https://evidence.ksp.gov.in/clip/10441.mp4,,KA-21-AH-4709,
+CAM-BEL-1442,Belagavi,15.9126,74.53838,2023-03-01 21:26:36,https://evidence.ksp.gov.in/clip/10442.mp4,SUS-1795,KA-55-NJ-8312,FIR-24140
+CAM-BAL-1443,Ballari,15.16653,76.97637,2023-02-02 02:32:45,https://evidence.ksp.gov.in/clip/10443.mp4,SUS-1663,,FIR-24555
+CAM-BEN-1444,Bengaluru Urban,12.98822,77.59944,2023-03-27 18:27:50,https://evidence.ksp.gov.in/clip/10444.mp4,SUS-1311,KA-25-MD-2008,FIR-23528
+CAM-BEN-1445,Bengaluru Urban,13.03204,77.57429,2023-04-24 22:23:09,https://evidence.ksp.gov.in/clip/10445.mp4,SUS-1707,,FIR-21623
+CAM-BEL-1446,Belagavi,15.86977,74.53657,2023-03-09 16:05:32,https://evidence.ksp.gov.in/clip/10446.mp4,,,
+CAM-MAN-1447,Mangaluru,12.88191,74.9576,2023-05-10 00:29:19,https://evidence.ksp.gov.in/clip/10447.mp4,SUS-1711;SUS-1419,KA-09-CA-8510,FIR-24227
+CAM-MYS-1448,Mysuru,12.27859,76.60505,2023-10-22 16:54:43,https://evidence.ksp.gov.in/clip/10448.mp4,SUS-1675,,FIR-22598
+CAM-BEL-1449,Belagavi,15.83646,74.54493,2023-09-18 06:05:49,https://evidence.ksp.gov.in/clip/10449.mp4,SUS-1176,,FIR-21389
+CAM-BEN-1450,Bengaluru Urban,12.97431,77.54526,2023-12-21 17:47:10,https://evidence.ksp.gov.in/clip/10450.mp4,,KA-49-GB-2256,
+CAM-BEN-1451,Bengaluru Urban,13.04136,77.56929,2023-04-24 22:23:09,https://evidence.ksp.gov.in/clip/10451.mp4,SUS-1358,,FIR-21623
+CAM-HUB-1452,Hubballi-Dharwad,15.3988,75.1439,2023-10-07 22:42:53,https://evidence.ksp.gov.in/clip/10452.mp4,SUS-1586,,FIR-22012
+CAM-MAN-1453,Mangaluru,12.89944,74.87079,2023-07-21 01:44:08,https://evidence.ksp.gov.in/clip/10453.mp4,SUS-1238,KA-01-KB-7059,FIR-22850
+CAM-BEN-1454,Bengaluru Urban,13.02611,77.56085,2023-09-22 05:46:29,https://evidence.ksp.gov.in/clip/10454.mp4,,,
+CAM-BEN-1455,Bengaluru Urban,13.04093,77.62759,2023-07-24 11:37:49,https://evidence.ksp.gov.in/clip/10455.mp4,,,
+CAM-BEN-1456,Bengaluru Urban,12.91883,77.63765,2023-03-15 20:09:30,https://evidence.ksp.gov.in/clip/10456.mp4,SUS-1295,,FIR-21717
+CAM-HUB-1457,Hubballi-Dharwad,15.34957,75.03033,2023-06-04 01:32:25,https://evidence.ksp.gov.in/clip/10457.mp4,SUS-1080,,FIR-24111
+CAM-DAK-1458,Dakshina Kannada,12.93132,75.1198,2023-08-29 11:55:44,https://evidence.ksp.gov.in/clip/10458.mp4,SUS-1231;SUS-1760,,FIR-20768
+CAM-MYS-1459,Mysuru,12.29426,76.6032,2023-02-17 23:55:49,https://evidence.ksp.gov.in/clip/10459.mp4,SUS-1147,,FIR-21792
+CAM-BEN-1460,Bengaluru Urban,12.95991,77.69575,2023-12-02 13:51:16,https://evidence.ksp.gov.in/clip/10460.mp4,SUS-1052,KA-19-HF-6923,FIR-23880
+CAM-MAN-1461,Mangaluru,12.91749,74.9228,2023-10-26 09:12:05,https://evidence.ksp.gov.in/clip/10461.mp4,SUS-1092,,FIR-20125
+CAM-HUB-1462,Hubballi-Dharwad,15.41078,75.1468,2023-03-24 04:49:00,https://evidence.ksp.gov.in/clip/10462.mp4,SUS-1251;SUS-1017,KA-05-CG-3440,FIR-20962
+CAM-HUB-1463,Hubballi-Dharwad,15.27237,75.17866,2023-07-28 00:29:06,https://evidence.ksp.gov.in/clip/10463.mp4,,KA-34-GC-8811,
+CAM-HUB-1464,Hubballi-Dharwad,15.42311,75.15595,2023-05-16 19:03:09,https://evidence.ksp.gov.in/clip/10464.mp4,SUS-1101,KA-03-AJ-1834,FIR-20639
+CAM-MYS-1465,Mysuru,12.30904,76.57438,2023-07-26 13:58:50,https://evidence.ksp.gov.in/clip/10465.mp4,SUS-1412,KA-34-NA-3531,FIR-23672
+CAM-MYS-1466,Mysuru,12.3265,76.63732,2023-09-27 19:06:25,https://evidence.ksp.gov.in/clip/10466.mp4,SUS-1101,,FIR-24697
+CAM-BEN-1467,Bengaluru Urban,12.91111,77.61833,2023-09-26 03:55:44,https://evidence.ksp.gov.in/clip/10467.mp4,SUS-1449;SUS-1150,,FIR-23253
+CAM-BEN-1468,Bengaluru Urban,12.9793,77.56487,2023-08-11 09:57:59,https://evidence.ksp.gov.in/clip/10468.mp4,,,
+CAM-HUB-1469,Hubballi-Dharwad,15.4205,75.09156,2023-01-24 11:36:38,https://evidence.ksp.gov.in/clip/10469.mp4,SUS-1189,KA-19-LJ-4153,FIR-24941
+CAM-BEL-1470,Belagavi,15.87695,74.51785,2023-04-14 14:59:27,https://evidence.ksp.gov.in/clip/10470.mp4,,,
+CAM-HUB-1471,Hubballi-Dharwad,15.34572,75.16966,2023-12-24 12:07:29,https://evidence.ksp.gov.in/clip/10471.mp4,SUS-1650,KA-41-KA-5980,FIR-24380
+CAM-BEN-1472,Bengaluru Urban,12.893,77.55552,2023-11-30 01:53:32,https://evidence.ksp.gov.in/clip/10472.mp4,SUS-1188,,FIR-24753
+CAM-MAN-1473,Mangaluru,12.96932,74.88379,2023-12-08 15:31:39,https://evidence.ksp.gov.in/clip/10473.mp4,SUS-1636;SUS-1582,,FIR-23748
+CAM-BEN-1474,Bengaluru Urban,13.0508,77.70014,2023-05-01 04:26:59,https://evidence.ksp.gov.in/clip/10474.mp4,,,
+CAM-DAK-1475,Dakshina Kannada,12.86919,75.19347,2023-07-26 06:30:28,https://evidence.ksp.gov.in/clip/10475.mp4,,KA-05-FH-6925,
+CAM-SHI-1476,Shivamogga,14.01178,75.58897,2023-06-27 02:19:05,https://evidence.ksp.gov.in/clip/10476.mp4,SUS-1644;SUS-1000,KA-41-KA-5980,FIR-23951
+CAM-BEN-1477,Bengaluru Urban,12.94762,77.57793,2023-05-12 11:37:09,https://evidence.ksp.gov.in/clip/10477.mp4,SUS-1671,,FIR-21574
+CAM-BEL-1478,Belagavi,15.94112,74.49881,2023-03-01 08:50:58,https://evidence.ksp.gov.in/clip/10478.mp4,SUS-1576;SUS-1178,,FIR-22285
+CAM-BEN-1479,Bengaluru Urban,12.97278,77.46845,2023-08-06 16:07:22,https://evidence.ksp.gov.in/clip/10479.mp4,SUS-1345,,FIR-23312
+CAM-MAN-1480,Mangaluru,13.00284,74.76113,2023-08-29 16:07:09,https://evidence.ksp.gov.in/clip/10480.mp4,,KA-20-PF-9836,
+CAM-TUM-1481,Tumakuru,13.27885,77.0409,2023-06-08 13:15:04,https://evidence.ksp.gov.in/clip/10481.mp4,SUS-1215,,FIR-23767
+CAM-BEN-1482,Bengaluru Urban,12.95215,77.66898,2023-06-11 08:02:15,https://evidence.ksp.gov.in/clip/10482.mp4,SUS-1521,,FIR-23594
+CAM-MAN-1483,Mangaluru,12.88838,74.87823,2023-02-09 00:24:09,https://evidence.ksp.gov.in/clip/10483.mp4,,,
+CAM-MAN-1484,Mangaluru,12.89833,74.87966,2023-07-25 14:55:25,https://evidence.ksp.gov.in/clip/10484.mp4,SUS-1341,KA-14-DB-2044,FIR-22838
+CAM-MYS-1485,Mysuru,12.29847,76.63742,2023-04-04 09:21:47,https://evidence.ksp.gov.in/clip/10485.mp4,SUS-1238;SUS-1447,KA-49-MH-8816,FIR-24080
+CAM-BEL-1486,Belagavi,15.88859,74.51166,2023-10-28 05:31:09,https://evidence.ksp.gov.in/clip/10486.mp4,SUS-1445,KA-03-AH-6069,FIR-20083
+CAM-HUB-1487,Hubballi-Dharwad,15.33806,75.14399,2023-11-01 14:51:37,https://evidence.ksp.gov.in/clip/10487.mp4,SUS-1043;SUS-1629,KA-19-MH-2941,FIR-22511
+CAM-HUB-1488,Hubballi-Dharwad,15.35529,75.15782,2023-06-27 17:52:58,https://evidence.ksp.gov.in/clip/10488.mp4,,,
+CAM-BEL-1489,Belagavi,15.89753,74.45739,2023-10-08 21:27:32,https://evidence.ksp.gov.in/clip/10489.mp4,SUS-1772,KA-55-QA-8255,FIR-23603
+CAM-BEN-1490,Bengaluru Urban,12.97419,77.50476,2023-08-27 06:55:02,https://evidence.ksp.gov.in/clip/10490.mp4,SUS-1552;SUS-1215,,FIR-22097
+CAM-BEN-1491,Bengaluru Urban,12.98959,77.67878,2023-10-11 22:31:30,https://evidence.ksp.gov.in/clip/10491.mp4,,KA-05-QC-6050,
+CAM-BEL-1492,Belagavi,15.78698,74.42267,2023-10-11 13:29:52,https://evidence.ksp.gov.in/clip/10492.mp4,,,
+CAM-BEN-1493,Bengaluru Urban,12.97486,77.51425,2023-05-09 15:39:57,https://evidence.ksp.gov.in/clip/10493.mp4,SUS-1261,,FIR-24034
+CAM-BEN-1494,Bengaluru Urban,12.92064,77.60983,2023-12-05 23:15:02,https://evidence.ksp.gov.in/clip/10494.mp4,SUS-1434,,FIR-23261
+CAM-DAK-1495,Dakshina Kannada,12.89556,75.19104,2023-06-13 17:16:08,https://evidence.ksp.gov.in/clip/10495.mp4,SUS-1359,,FIR-20972
+CAM-DAK-1496,Dakshina Kannada,12.83932,75.14273,2023-11-05 06:32:50,https://evidence.ksp.gov.in/clip/10496.mp4,SUS-1162,,FIR-24903
+CAM-MYS-1497,Mysuru,12.26059,76.54612,2023-05-29 04:56:58,https://evidence.ksp.gov.in/clip/10497.mp4,SUS-1386,,FIR-20183
+CAM-MAN-1498,Mangaluru,12.91192,74.93284,2023-08-02 12:32:27,https://evidence.ksp.gov.in/clip/10498.mp4,SUS-1320,KA-06-BE-8084,FIR-20265
+CAM-DAK-1499,Dakshina Kannada,12.87396,75.09384,2023-05-21 14:26:52,https://evidence.ksp.gov.in/clip/10499.mp4,SUS-1302,,FIR-21949

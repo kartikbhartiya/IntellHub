@@ -1,0 +1,24 @@
+# Versions are pinned to what is installable as a **Linux cp313 wheel**, because
+# AppSail does not install requirements.txt server-side — the deps are vendored
+# (see appsail/predeploy_check.py) and the container must be able to LOAD the
+# committed .joblib artifacts rather than retrain them.
+#
+# That last point is the operative constraint. The registry refuses an artifact
+# built by a different scikit-learn than the runtime, so a mismatch forces an
+# in-process retrain of all seven models. On a 512 MB AppSail container, with the
+# corpus and knowledge graph already resident, that retrain exhausts memory and
+# the container thrashes. Training and serving therefore pin the same versions.
+Flask==3.1.3
+flask-cors==6.0.5
+pandas==2.3.2
+numpy==2.2.6
+scikit-learn==1.7.2
+networkx==3.6.1
+gunicorn==23.0.0
+requests==2.32.5
+openai==2.41.1
+httpx==0.28.1
+# Pulled in transitively by scikit-learn, but imported directly by ml/ —
+# pinned explicitly so a re-vendor cannot drop them.
+scipy==1.16.2
+joblib==1.5.3

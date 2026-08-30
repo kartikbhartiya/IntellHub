@@ -1,0 +1,16 @@
+ActCode,SectionCode,SectionDescription,Active
+IPC,379,Theft,1
+IPC,356,Assault to commit theft,1
+IPC,457,Lurking house-trespass,1
+IPC,380,Theft in dwelling house,1
+IPC,384,Extortion,1
+IPC,386,Extortion by putting in fear of death,1
+IPC,302,Murder,1
+IPC,323,Voluntarily causing hurt,1
+IPC,304,Culpable homicide,1
+IPC,420,Cheating,1
+IPC,34,Common intention,1
+BNS,304(2),Snatching,1
+NDPS,20(b),Cannabis possession,1
+IT Act,66C,Identity theft,1
+Karnataka Forest Act,86,Sandalwood possession,1
