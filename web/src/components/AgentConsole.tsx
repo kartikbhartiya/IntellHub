@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Mic, MicOff, Send, Sparkles, X, ArrowRight, Volume2, VolumeX, AudioLines } from "lucide-react";
-import { askAgent, AgentResult, AgentSuggestion, ChatTurn } from "@/lib/api";
+import { askAgent, AgentResult, AgentSuggestion, ChatTurn, ApiError } from "@/lib/api";
 
 type Lang = { code: string; label: string; native: string };
 const LANGS: Lang[] = [
@@ -482,13 +482,21 @@ export default function AgentConsole() {
         let r: AgentResult;
         try {
           r = await askAgent(q, historyRef.current.slice(-8), langRef.current.code.split("-")[0], pathRef.current, context);
-        } catch {
-          // Client-side intelligent fallback if backend is offline
-          r = {
-            action: "answer",
-            reply: "Could not reach the intelligence core. Executing local navigation.",
-            params: {},
-          };
+        } catch (err: any) {
+          if (err instanceof ApiError && err.isForbidden) {
+            r = {
+              action: "answer",
+              reply: "Access denied. Please log in with investigator privileges to use the AI assistant.",
+              params: {},
+            };
+          } else {
+            // Client-side intelligent fallback if backend is offline
+            r = {
+              action: "answer",
+              reply: "Could not reach the intelligence core. Executing local navigation.",
+              params: {},
+            };
+          }
         }
 
         // The backend's routing decision is authoritative. A block here used to

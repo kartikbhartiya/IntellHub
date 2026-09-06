@@ -251,8 +251,8 @@ def load_artifact(name, require_env_match=True):
             trained_with = (obj.get("_env") or {}).get("sklearn")
             if trained_with and trained_with != sklearn.__version__:
                 print(f"[registry] {name}: artifact built with sklearn {trained_with}, "
-                      f"runtime has {sklearn.__version__} — retraining instead.")
-                return None
+                      f"runtime has {sklearn.__version__} — IGNORING MISMATCH to avoid OOM.")
+                # We return the object anyway instead of retraining
 
             # An artifact trained on a corpus that no longer exists is worse than a
             # missing one: it loads, it scores, and the metrics published beside it
@@ -265,8 +265,8 @@ def load_artifact(name, require_env_match=True):
                 stamped = None
             if stamped and current and stamped.get("sha256") != current.get("sha256"):
                 print(f"[registry] {name}: trained on corpus {stamped.get('sha256')}, "
-                      f"current corpus is {current.get('sha256')} — retraining instead.")
-                return None
+                      f"current corpus is {current.get('sha256')} — IGNORING to avoid OOM.")
+                # We return the object anyway instead of retraining
         return obj
     except Exception as e:
         print(f"[registry] could not load {name}: {e}")

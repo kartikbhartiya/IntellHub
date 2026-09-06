@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { X, Network, ShieldAlert, ArrowRight, Expand, Search, SlidersHorizontal, Shrink } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -158,7 +158,11 @@ function NetworkInner() {
       setGraphData(data);
       setSelectedNode(null);
     } catch (err: any) {
-      setError(err.message);
+      if (err instanceof ApiError && err.isForbidden) {
+        setError("Access Denied. You need investigator privileges to view the network graph");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setIsLoadingGraph(false);
     }
@@ -536,8 +540,12 @@ function NetworkInner() {
             <div className="absolute inset-0 z-40 flex items-center justify-center backdrop-blur-md">
               <div className="flex max-w-md flex-col items-center rounded-2xl border border-crimson/30 bg-crimson/[0.06] p-6 text-center">
                 <ShieldAlert className="mb-4 h-12 w-12 text-crimson" />
-                <p className="mb-2 text-lg font-medium text-crimson">Connection Failed</p>
-                <p className="text-[13px] text-muted">{error}. Ensure the intelligence core is running.</p>
+                <p className="mb-2 text-lg font-medium text-crimson">
+                  {error.includes("Access Denied") ? "Access Denied" : "Connection Failed"}
+                </p>
+                <p className="text-[13px] text-muted">
+                  {error}{error.includes("Access Denied") ? "" : ". Ensure the intelligence core is running."}
+                </p>
               </div>
             </div>
           )}

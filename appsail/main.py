@@ -72,7 +72,7 @@ def options_handler(path):
 def before_request_func():
     if request.method == 'OPTIONS':
         return
-    if request.path == '/' or request.path == '/favicon.ico':
+    if request.path == '/' or request.path == '/favicon.ico' or request.path == '/serverless/api/health':
         return
     check_ready()
 
@@ -241,13 +241,8 @@ def _load_and_build_locked(force=False):
         
         # Pre-aggregate ActSectionAssociation
         df_asa = data_cache['ActSectionAssociation']
-        asa_list = []
-        for cid, g in df_asa.groupby("CaseMasterID"):
-            parts = []
-            for _, r in g.iterrows():
-                parts.append(f"{r['ActID']} {r['SectionID']}")
-            asa_list.append((cid, " · ".join(parts)))
-        asa_map = dict(asa_list)
+        df_asa['ActSection'] = df_asa['ActID'].astype(str) + " " + df_asa['SectionID'].astype(str)
+        asa_map = df_asa.groupby("CaseMasterID")['ActSection'].apply(lambda x: " · ".join(x)).to_dict()
         
         # Accused counts
         df_acc = data_cache['Accused']
@@ -262,19 +257,19 @@ def _load_and_build_locked(force=False):
 
         firs_records = []
         _bad_timestamps = 0
-        for _, row in df_cm.iterrows():
-            cm_id = row["CaseMasterID"]
-            u_id = row["PoliceStationID"]
+        for row in df_cm.itertuples():
+            cm_id = row.CaseMasterID
+            u_id = row.PoliceStationID
             d_id = unit_to_dist_id.get(u_id, 1)
             dist_name = dist_map.get(d_id, "Unknown")
             ps_name = unit_map.get(u_id, "Unknown PS")
-            crime_type = subhead_map.get(row["CrimeMinorHeadID"], "Unknown")
-            status_name = status_map.get(row["CaseStatusID"], "Under Investigation")
-            emp_id = row["PolicePersonID"]
+            crime_type = subhead_map.get(row.CrimeMinorHeadID, "Unknown")
+            status_name = status_map.get(row.CaseStatusID, "Under Investigation")
+            emp_id = row.PolicePersonID
             off_kgid = emp_kgid_map.get(emp_id, f"OFF-{emp_id}")
             
             # Parse BriefFacts metadata
-            facts = str(row["BriefFacts"])
+            facts = str(row.BriefFacts)
             m = metadata_pat.search(facts)
             if m:
                 sev = int(m.group(1))
@@ -294,7 +289,7 @@ def _load_and_build_locked(force=False):
                 wit = 0
             
             # Time of day calculation
-            ts_str = str(row["IncidentFromDate"])
+            ts_str = str(row.IncidentFromDate)
             try:
                 hour = int(ts_str.split()[1].split(":")[0])
                 if hour >= 23 or hour < 5:
@@ -306,19 +301,16 @@ def _load_and_build_locked(force=False):
                 else:
                     tod = "Evening (5PM-8PM)"
             except Exception:
-                # An unparseable timestamp silently becoming "Morning" turns a data
-                # fault into a plausible-looking time-of-day distribution. Counted
-                # and reported once at the end rather than per row.
                 tod = "Morning (7AM-10AM)"
                 _bad_timestamps += 1
 
             firs_records.append({
-                "case_id": str(row["CrimeNo"]),
+                "case_id": str(row.CrimeNo),
                 "district": dist_name,
-                "latitude": row["latitude"],
-                "longitude": row["longitude"],
+                "latitude": row.latitude,
+                "longitude": row.longitude,
                 "crime_type": crime_type,
-                "timestamp": row["IncidentFromDate"],
+                "timestamp": row.IncidentFromDate,
                 "severity_score": sev,
                 "status": status_name,
                 "time_of_day": tod,
@@ -336,8 +328,8 @@ def _load_and_build_locked(force=False):
                 "fatalities": fatal,
                 "injured": injured,
                 "accused_count": acc_counts.get(cm_id, 0),
-                "CrimeNo": str(row["CrimeNo"]),
-                "CaseNo": str(row["CaseNo"]),
+                "CrimeNo": str(row.CrimeNo),
+                "CaseNo": str(row.CaseNo),
                 "CaseMasterID": cm_id
             })
         df_firs = pd.DataFrame(firs_records)
@@ -351,13 +343,13 @@ def _load_and_build_locked(force=False):
         off_reg_map = df_off_reg.set_index("EmployeeID").to_dict("index")
         
         officers_records = []
-        for _, row in df_emp.iterrows():
-            emp_id = row["EmployeeID"]
-            u_id = row["UnitID"]
+        for row in df_emp.itertuples():
+            emp_id = row.EmployeeID
+            u_id = row.UnitID
             st_name = unit_map.get(u_id, "Unknown PS")
             d_id = unit_to_dist_id.get(u_id, 1)
             d_name = dist_map.get(d_id, "Unknown")
-            rk_name = rank_name_map.get(row["RankID"], "PC")
+            rk_name = rank_name_map.get(row.RankID, "PC")
             
             reg = off_reg_map.get(emp_id, {})
             spec = reg.get("specialization", "General")
@@ -366,8 +358,8 @@ def _load_and_build_locked(force=False):
             comm = reg.get("commendations", 0)
             
             officers_records.append({
-                "officer_id": row["KGID"],
-                "name": row["FirstName"],
+                "officer_id": row.KGID,
+                "name": row.FirstName,
                 "rank": rk_name,
                 "station": st_name,
                 "district": d_name,
@@ -375,11 +367,11 @@ def _load_and_build_locked(force=False):
                 "cases_assigned": cases_assigned,
                 "closure_rate": closure_rate,
                 "commendations": comm,
-                "dob": row["EmployeeDOB"],
-                "appointment_date": row["AppointmentDate"],
-                "blood_group": row["BloodGroupID"],
-                "gender": "Male" if row["GenderID"] == 1 else "Female",
-                "physically_challenged": bool(row["PhysicallyChallenged"]),
+                "dob": row.EmployeeDOB,
+                "appointment_date": row.AppointmentDate,
+                "blood_group": row.BloodGroupID,
+                "gender": "Male" if row.GenderID == 1 else "Female",
+                "physically_challenged": bool(row.PhysicallyChallenged),
                 "employee_id": emp_id
             })
         df_officers = pd.DataFrame(officers_records)
@@ -453,16 +445,19 @@ def _load_and_build_locked(force=False):
     new_graph = nx.Graph()
     
     # Add Nodes
-    for _, row in df_firs.iterrows():
-        new_graph.add_node(row['case_id'], type='Case', crime_type=row['crime_type'], district=row['district'])
+    for row in df_firs.itertuples():
+        new_graph.add_node(row.case_id, type='Case', crime_type=row.crime_type, district=row.district)
         
-    for _, row in df_suspects.iterrows():
-        new_graph.add_node(row['suspect_id'], type='Suspect', name=row['name'],
-                                 gang=row['gang_affiliation'], risk_level=row.get('risk_level', 'Unknown'))
+    for row in df_suspects.itertuples():
+        # Suspect dataframe might not have risk_level or gang_affiliation in every config, use getattr with defaults if needed
+        risk = getattr(row, 'risk_level', 'Unknown')
+        gang = getattr(row, 'gang_affiliation', 'Unknown')
+        name = getattr(row, 'name', 'Unknown')
+        new_graph.add_node(row.suspect_id, type='Suspect', name=name, gang=gang, risk_level=risk)
         
     # Add Edges
-    for _, row in df_links.iterrows():
-        new_graph.add_edge(row['case_id'], row['suspect_id'], relationship=row['relationship'])
+    for row in df_links.itertuples():
+        new_graph.add_edge(row.case_id, row.suspect_id, relationship=row.relationship)
         
     LOG.info(f"Graph built: {new_graph.number_of_nodes()} nodes, "
              f"{new_graph.number_of_edges()} edges (not yet published).")
@@ -606,9 +601,9 @@ def _load_and_build_locked(force=False):
         row_indices = anom.index.tolist()
 
         anomalies = []
-        for _, row in flagged.iterrows():
+        for row in flagged.itertuples():
             reasons = []
-            idx_in_feats = row_indices.index(row.name)
+            idx_in_feats = row_indices.index(row.Index)
             v = features[idx_in_feats]
             z_scores = (v - means) / stds
             
@@ -747,9 +742,16 @@ def _load_and_build_locked(force=False):
         LOG.warning(f"Dispatch computation skipped: {e}")
         data_cache['dispatch'] = []
 
-    data_cache['suspect_case_meta'] = _build_suspect_case_metadata()
+    try:
+        data_cache['suspect_case_meta'] = _build_suspect_case_metadata()
+    except Exception as e:
+        LOG.error(f"suspect_case_meta failed: {e}")
+        data_cache['suspect_case_meta'] = {}
 
-    build_advanced_analytics(timestamp_dt, ml_bundle=ml_bundle)
+    try:
+        build_advanced_analytics(timestamp_dt, ml_bundle=ml_bundle)
+    except Exception as e:
+        LOG.error(f"Advanced analytics failed: {e}")
 
     data_cache['_load_complete'] = True
     return True
@@ -873,31 +875,36 @@ def build_extended_graph_and_analytics(graph=None):
     # --- Officers ↔ cases ---
     officers = data_cache.get('officers')
     if officers is not None and not officers.empty:
-        for _, o in officers.iterrows():
-            G.add_node(o['officer_id'], type='Officer', name=o['name'],
-                       rank=o['rank'], station=o['station'])
+        for o in officers.itertuples():
+            G.add_node(o.officer_id, type='Officer', name=o.name,
+                       rank=o.rank, station=o.station)
         if 'officer_id' in df_firs.columns:
-            for _, r in df_firs.iterrows():
-                oid = r.get('officer_id')
+            for r in df_firs.itertuples():
+                oid = getattr(r, 'officer_id', None)
                 if isinstance(oid, str) and G.has_node(oid):
-                    G.add_edge(oid, r['case_id'], relationship='Investigating Officer')
+                    G.add_edge(oid, r.case_id, relationship='Investigating Officer')
         ext['officers_total'] = int(len(officers))
         top = officers.sort_values(['commendations', 'closure_rate'], ascending=False).head(5)
         ext['top_officers'] = [{
-            "officer_id": o['officer_id'], "name": o['name'], "rank": o['rank'],
-            "station": o['station'], "cases": int(o['cases_assigned']),
-            "closure_rate": float(o['closure_rate'])
-        } for _, o in top.iterrows()]
+            "officer_id": o.officer_id, "name": o.name, "rank": o.rank,
+            "station": o.station, "cases": int(o.cases_assigned),
+            "closure_rate": float(o.closure_rate)
+        } for o in top.itertuples()]
 
     # --- Stolen vehicles ↔ cases ---
     vehicles = data_cache.get('vehicles')
     if vehicles is not None and not vehicles.empty:
-        for _, v in vehicles.iterrows():
-            G.add_node(v['vehicle_number'], type='Vehicle',
-                       make=v.get('make_model'), recovery=v.get('recovery_status'))
-            lc = v.get('linked_case_id')
-            if isinstance(lc, str) and lc and G.has_node(lc):
-                G.add_edge(v['vehicle_number'], lc, relationship='Vehicle Involved')
+        for v in vehicles.itertuples():
+            # Use getattr for column names to avoid syntax errors if column doesn't match
+            v_num = getattr(v, 'vehicle_number', None)
+            make = getattr(v, 'make_model', None)
+            rec_st = getattr(v, 'recovery_status', None)
+            lc = getattr(v, 'linked_case_id', None)
+            
+            if v_num:
+                G.add_node(v_num, type='Vehicle', make=make, recovery=rec_st)
+                if isinstance(lc, str) and lc and G.has_node(lc):
+                    G.add_edge(v_num, lc, relationship='Vehicle Involved')
         rec = int((vehicles['recovery_status'] == 'Recovered').sum())
         ext['vehicles_total'] = int(len(vehicles))
         ext['vehicles_recovered'] = rec
@@ -908,10 +915,11 @@ def build_extended_graph_and_analytics(graph=None):
     if cyber is not None and not cyber.empty:
         ident_cases = {}
         fraud_by_case = dict(zip(cyber['case_id'], cyber['fraud_amount']))
-        for _, c in cyber.iterrows():
-            cid = c['case_id']
+        for c in cyber.itertuples():
+            cid = c.case_id
             for col, pfx in [('phone_numbers', 'PHONE'), ('upi_ids', 'UPI'), ('bank_accounts', 'ACCT')]:
-                for tok in _split(c.get(col, '')):
+                val = getattr(c, col, '')
+                for tok in _split(val):
                     nid = f"{pfx}:{tok}"
                     ident_cases.setdefault(nid, set()).add(cid)
                     if not G.has_node(nid):
@@ -936,10 +944,12 @@ def build_extended_graph_and_analytics(graph=None):
         ext['rowdy_sheeters'] = int(criminals.get('rowdy_sheeter', pd.Series(dtype=bool)).sum())
         ext['active_warrants'] = int(criminals.get('active_warrant', pd.Series(dtype=bool)).sum())
         ext['history_sheeters'] = int(criminals.get('history_sheet', pd.Series(dtype=bool)).sum())
-        for _, cr in criminals.iterrows():
-            for a in _split(cr.get('known_associates', '')):
-                if G.has_node(cr['criminal_id']) and G.has_node(a):
-                    G.add_edge(cr['criminal_id'], a, relationship='Known Associate')
+        for cr in criminals.itertuples():
+            cid = getattr(cr, 'criminal_id', None)
+            ass = getattr(cr, 'known_associates', '')
+            for a in _split(ass):
+                if cid and G.has_node(cid) and G.has_node(a):
+                    G.add_edge(cid, a, relationship='Known Associate')
 
     # --- Missing persons ---
     missing = data_cache.get('missing')

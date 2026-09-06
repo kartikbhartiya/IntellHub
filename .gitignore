@@ -1,7 +1,7 @@
 # ---- Dependencies ----
 node_modules/
 # Vendored Linux wheels for Catalyst AppSail (397MB, regenerate with the pip --platform command; see README)
-appsail/_vendor/
+# appsail/_vendor/
 
 # ---- Secrets / env ----
 .env
