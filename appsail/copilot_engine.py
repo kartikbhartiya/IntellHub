@@ -373,6 +373,30 @@ def detect_station(text, idx):
     return best
 
 
+# Enough Kannada for the offline engine to read the common question shapes; the LLM
+# path understands Kannada natively.
+KANNADA_TERMS = {
+    "ಕೊಲೆ": "murder", "ಹಲ್ಲೆ": "assault", "ಸರಗಳ್ಳತನ": "chain snatching", "ಕಳ್ಳತನ": "theft",
+    "ವಾಹನ ಕಳ್ಳತನ": "vehicle theft", "ಮನೆಗಳ್ಳತನ": "house break", "ಸುಲಿಗೆ": "extortion",
+    "ಮಾದಕ": "narcotics", "ಗಾಂಜಾ": "ganja", "ಶ್ರೀಗಂಧ": "sandalwood", "ಸೈಬರ್": "cyber fraud",
+    "ವಂಚನೆ": "fraud", "ಎಷ್ಟು": "how many", "ಪ್ರಕರಣ": "cases", "ಜಿಲ್ಲೆ": "district",
+    "ಠಾಣೆ": "station", "ತನಿಖೆಯಲ್ಲಿ": "under investigation", "ರೌಡಿ": "rowdy", "ವಾರಂಟ್": "warrant",
+    "ಮುನ್ಸೂಚನೆ": "forecast", "ಹೆಚ್ಚು": "most", "ಆರೋಪಿ": "accused",
+    "ಬೆಂಗಳೂರು": "bengaluru", "ಮೈಸೂರ": "mysuru", "ಬೆಳಗಾವಿ": "belagavi", "ಕಲಬುರಗಿ": "kalaburagi",
+    "ಮಂಗಳೂರು": "mangaluru", "ಹುಬ್ಬಳ್ಳಿ": "hubballi", "ತುಮಕೂರು": "tumakuru", "ಬಳ್ಳಾರಿ": "ballari",
+    "ಶಿವಮೊಗ್ಗ": "shivamogga", "ಹಾಸನ": "hassan", "ಮಂಡ್ಯ": "mandya", "ಉಡುಪಿ": "udupi",
+}
+
+
+def _kannada_to_english(text):
+    if not re.search(r"[\u0C80-\u0CFF]", text or ""):
+        return text
+    out = text
+    for kn, en in sorted(KANNADA_TERMS.items(), key=lambda kv: -len(kv[0])):
+        out = out.replace(kn, f" {en} ")
+    return out
+
+
 def resolve_case(ref, idx):
     """Any case reference -> canonical case_id, or None."""
     if ref is None:
@@ -478,6 +502,18 @@ def extract_entities(text, idx, context=None, history=None):
             if kind == "officer" and len(hits) == 1 and ident not in e["officers"]:
                 e["officers"].append(ident)
 
+    # "the first one", "the second accused" -> that position in the previous answer's list.
+    om = re.search(r"\b(first|second|third|fourth|fifth|1st|2nd|3rd|4th|5th|last)\s+(one|person|accused|suspect|offender|co-?offender|guy|man|woman)?\b", t, re.I)
+    if om and not e["suspects"]:
+        prev = next((str(h.get("content") or "") for h in reversed(history or []) if h.get("role") == "assistant"), "")
+        ids = list(dict.fromkeys(m.upper() for m in re.findall(r"SUS-\d{3,6}", prev, re.I)))
+        pos = {"first": 0, "1st": 0, "second": 1, "2nd": 1, "third": 2, "3rd": 2, "fourth": 3, "4th": 3,
+               "fifth": 4, "5th": 4, "last": -1}[om.group(1).lower()]
+        if ids and (pos == -1 or pos < len(ids)):
+            e["suspects"].append(ids[pos])
+            e["resolved_from_context"] = ids[pos]
+
+    t = _kannada_to_english(t)
     e["district"] = detect_district(t, idx)
     e["crime_type"] = detect_crime(t, idx)
     e["status"] = detect_status(t)
@@ -1381,7 +1417,8 @@ def _cue(low, words):
 
 def plan(text, idx, ents):
     """Ordered (tool, args) calls that a question needs."""
-    low = (text or "").lower()
+    low = _kannada_to_english(text or "").lower()
+    text = _kannada_to_english(text or "")
     calls = []
     for c in ents["cases"][:3]:
         calls.append(("get_case", {"case_ref": c}))

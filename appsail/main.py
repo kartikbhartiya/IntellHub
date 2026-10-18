@@ -2765,7 +2765,8 @@ def llm_complete(messages, temperature=0.3, max_tokens=1024):
 _QUESTION_CUES = ("?", "how many", "how much", "what", "why", "which", "who", "where", "when",
                   "list", "tell me", "explain", "summar", "compare", "should", "is there",
                   "are there", "kya", "kaun", "kahan", "kyun", "batao",
-                  "yaava", "eshtu", "hege", "yake", "yaaru", "elli", "heli")
+                  "yaava", "eshtu", "hege", "yake", "yaaru", "elli", "heli",
+                  "ಎಷ್ಟು", "ಯಾರು", "ಯಾವ", "ಏನು", "ಎಲ್ಲಿ", "ಏಕೆ", "ಹೇಗೆ")
 
 
 def _is_question(text):
