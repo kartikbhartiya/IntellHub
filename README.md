@@ -432,12 +432,18 @@ threshold, because real geography defeats thresholds: Koppal and Hosapete
   (search, pin, rename, delete), each thread is its own context, answers carry the records they used and a
   one-click "open this" action, voice dictation, English / ಕನ್ನಡ.
 
-### 8. 🗺️ Crime Map — MapLibre, 2D / 3D / districts / satellite / night
-* One vector engine (MapLibre GL over OpenFreeMap / CARTO tiles, Esri imagery for satellite — no API key).
-* **3D city:** pitched view with extruded buildings and hexagonal crime columns whose height and colour
-  encode density; the bin size adapts to zoom. **2D:** severity heatmap, clusters, individual FIRs, DBSCAN
-  zones. **Districts:** a choropleth of all 31 districts — real boundaries, extruded by the chosen metric
-  (cases, per-100k, open, deaths, last 30 days, risk index, cameras).
+### 8. 🗺️ Crime Map — deck.gl command map: 3D / heatmap / districts / satellite
+* deck.gl draws every layer over keyless CARTO basemaps (dark or light) or Esri imagery for satellite —
+  no API key. Neighbouring states are dimmed and Karnataka carries a glowing outline, so the state is the
+  subject of the screen.
+* **3D:** tilted hexagonal crime columns whose height and colour encode density (square-root scaled, so
+  Bengaluru does not flatten every other district); the bin size adapts to zoom and the columns rise when
+  they appear. **Heatmap:** severity-weighted heat, individual FIRs, DBSCAN zones. **Districts:** a
+  choropleth of all 31 districts — real boundaries, extruded by the chosen metric (cases, per-100k, open,
+  deaths, last 30 days, risk index, cameras), labels de-cluttered so the busiest district wins.
+* **Full screen for presenting:** the map and its insight panel go full screen together (button or `F`);
+  Esc or the red *Exit full screen* button leaves, the panel can be hidden, and the state is re-framed
+  whenever the stage changes size.
 * Pulsing KDE predicted hotspots, emerging-spike markers, live camera alerts, a numbered movement trail
   for a tracked person (`/map?track=SUS-…`), a 24-hour time-of-day playback, and a cinematic tour.
 * "This view" analyses whatever is on screen: concentration, peak hour, busiest window, open share.
@@ -458,8 +464,14 @@ threshold, because real geography defeats thresholds: Koppal and Hosapete
   who must write what they checked to verify or reject; every decision is logged. Personal watchlists,
   sound / desktop notifications and a nav bell with toasts. Faces with no registry match are counted and
   discarded, never identified.
-* Feeds show the camera's real location as aerial reference imagery with sensor treatment and the
-  matcher's boxes; an officer can point any camera at a real stream URL.
+* **Feeds play real footage with real detections.** Each camera plays a 20-second window of street
+  video recorded in Bengaluru in 2024–25 (Wikimedia Commons, CC BY-SA 4.0 / CC BY 3.0, credited in the
+  camera view and under the wall); cameras named after a place we have footage of — Brigade Road, MG Road,
+  Hebbal, Banashankari, Shivajinagar, Mekhri Circle — show that place. The boxes are YOLO11s detections
+  with ByteTrack tracking computed on that footage (`web/public/cctv/tracks/`), replayed in step with the
+  video, with live vehicle / people counts. Registry matches appear as an alert strip on the tile and are
+  never drawn on anyone in the picture — nobody filmed is a registry person. An officer can still point any
+  camera at a real stream URL.
 
 ---
 
@@ -714,4 +726,4 @@ docker-compose down
 
 ## 🛡️ License & Attributions
 
-Developed for the **Karnataka State Police (KSP) State Crime Records Bureau (SCRB)** Datathon. Built with Python, Flask, NetworkX, Scikit-Learn, Next.js, Tailwind CSS, Recharts, and the Google Maps JavaScript API with a keyless Leaflet fallback.
+Developed for the **Karnataka State Police (KSP) State Crime Records Bureau (SCRB)** Datathon. Built with Python, Flask, NetworkX, Scikit-Learn, Next.js, Tailwind CSS, Recharts, deck.gl and MapLibre.

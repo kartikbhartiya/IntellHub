@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -11,6 +12,7 @@ import {
 import { apiFetch, getJSON, ApiError } from "@/lib/api";
 import { useAlerts, patchAlert, refreshAlerts, ago, istTime, useNow, type SurvAlert } from "@/lib/alerts";
 import CameraFeed, { Face, type Detection, type FeedCamera } from "@/components/CameraFeed";
+import { CLIPS, assignClips, type Clip } from "@/lib/footage";
 
 type Cam = FeedCamera & { matches_last_hour?: number; owner?: string; uptime_pct?: number; landmark?: boolean; quality?: number };
 
@@ -149,6 +151,14 @@ function SurveillanceInner() {
     .filter((a) => railS === "all" || a.status === "new"), [alerts, district, railP, railS]);
 
   const inDistrict = cams.filter((c) => !district || c.district === district);
+
+  // Footage per camera, assigned in a fixed order (landmarks first) so a tile keeps its
+  // clip when new alerts re-sort the wall, and the first screenful rarely repeats one.
+  const footage = useMemo(() => assignClips(
+    cams.filter((c) => !district || c.district === district)
+      .sort((a, b) => (Number(!!b.landmark) - Number(!!a.landmark)) || a.camera_id.localeCompare(b.camera_id))),
+  [cams, district]);
+  const reviewCam = review ? cams.find((c) => c.camera_id === review.camera_id) : undefined;
   const p1New = alerts.filter((a) => a.priority === "P1" && a.status === "new" && (!district || a.district === district)).length;
   const ev = model?.evaluation?.face;
 
@@ -248,7 +258,7 @@ function SurveillanceInner() {
               return (
                 <motion.article key={c.camera_id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                                 className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow hover:shadow-lg ${hot?.priority === "P1" ? "border-crimson/50 ring-2 ring-crimson/20" : "border-black/10"}`}>
-                  <CameraFeed cam={c} detections={dets} streamUrl={streams[c.camera_id]} />
+                  <CameraFeed cam={c} clip={footage[c.camera_id]} detections={dets} streamUrl={streams[c.camera_id]} />
                   <div className="p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -276,6 +286,7 @@ function SurveillanceInner() {
               Load 12 more feeds
             </button>
           )}
+          <FootageNote />
 
           {/* ----------------------------------------------------------- tools */}
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -324,9 +335,10 @@ function SurveillanceInner() {
       </div>
 
       <AnimatePresence>
-        {review && <ReviewModal key={review.event_id} a={review} onClose={() => { setReview(null); if (params.get("alert")) router.replace("/surveillance"); }} />}
+        {review && <ReviewModal key={review.event_id} a={review} cam={reviewCam} clip={reviewCam && footage[reviewCam.camera_id]}
+                                onClose={() => { setReview(null); if (params.get("alert")) router.replace("/surveillance"); }} />}
         {camOpen && (
-          <CameraModal key={camOpen.camera_id} cam={camOpen} stream={streams[camOpen.camera_id]} onStream={(u) => setStream(camOpen.camera_id, u)}
+          <CameraModal key={camOpen.camera_id} cam={camOpen} clip={footage[camOpen.camera_id]} stream={streams[camOpen.camera_id]} onStream={(u) => setStream(camOpen.camera_id, u)}
                        detections={(latestByCam[camOpen.camera_id] || []).map((e) => detectionFor(e, () => setReview(e)))}
                        onReview={setReview} onClose={() => { setCamOpen(null); if (params.get("camera")) router.replace("/surveillance"); }} />
         )}
@@ -368,7 +380,9 @@ function Modal({ children, onClose, wide }: { children: React.ReactNode; onClose
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
-  return (
+  // Portalled to <body>: inside <main> the dialog shares main's stacking context and the
+  // fixed nav and Kavya bar would sit on top of it.
+  return createPortal(
     <motion.div className="fixed inset-0 z-[80] grid place-items-center bg-[#0b0e14]/55 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div onClick={(e) => e.stopPropagation()} initial={{ y: 20, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 10, scale: 0.98 }}
                   transition={{ type: "spring", stiffness: 360, damping: 30 }}
@@ -376,11 +390,12 @@ function Modal({ children, onClose, wide }: { children: React.ReactNode; onClose
         <button onClick={onClose} className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/[0.06] text-muted hover:text-ink"><X className="h-4 w-4" /></button>
         {children}
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 
-function ReviewModal({ a: initial, onClose }: { a: any; onClose: () => void }) {
+function ReviewModal({ a: initial, cam, clip, onClose }: { a: any; cam?: Cam; clip?: Clip; onClose: () => void }) {
   const [a, setA] = useState(initial);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -433,15 +448,14 @@ function ReviewModal({ a: initial, onClose }: { a: any; onClose: () => void }) {
         </div>
 
         {face ? (
-          <div className="mt-5 grid gap-5 md:grid-cols-[1fr_1fr_1.2fr]">
+          <div className="mt-5 grid gap-5 md:grid-cols-[1.5fr_0.8fr_1.2fr]">
             <figure>
               <div className="relative overflow-hidden rounded-2xl bg-black">
-                <Face src={p.photo_url} name={p.name} capture className="aspect-square w-full text-4xl opacity-90" />
-                <div className="cam-grain pointer-events-none absolute inset-0" />
-                <span className="absolute left-2 top-2 rounded bg-[#ff3b30] px-1.5 font-mono text-[10px] font-bold text-white">CAPTURE</span>
-                <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 font-mono text-[10px] text-white">{a.camera_id} · q {a.quality}</span>
+                {cam ? <CameraFeed cam={cam} clip={clip} /> : (
+                  <Face src={p.photo_url} name={p.name} capture className="aspect-square w-full text-4xl opacity-90" />
+                )}
               </div>
-              <figcaption className="mt-1.5 text-center text-[11.5px] text-muted">CCTV frame</figcaption>
+              <figcaption className="mt-1.5 text-center text-[11.5px] text-muted">{a.camera_id} · capture quality {a.quality}</figcaption>
             </figure>
             <figure>
               <div className="relative overflow-hidden rounded-2xl">
@@ -535,8 +549,8 @@ function ReviewModal({ a: initial, onClose }: { a: any; onClose: () => void }) {
   );
 }
 
-function CameraModal({ cam, detections, stream, onStream, onReview, onClose }:
-  { cam: Cam; detections: Detection[]; stream?: string; onStream: (u: string) => void; onReview: (e: any) => void; onClose: () => void }) {
+function CameraModal({ cam, clip, detections, stream, onStream, onReview, onClose }:
+  { cam: Cam; clip?: Clip; detections: Detection[]; stream?: string; onStream: (u: string) => void; onReview: (e: any) => void; onClose: () => void }) {
   const [detail, setDetail] = useState<any>(null);
   const [url, setUrl] = useState(stream || "");
   const [showCfg, setShowCfg] = useState(false);
@@ -546,7 +560,16 @@ function CameraModal({ cam, detections, stream, onStream, onReview, onClose }:
   }, [cam.camera_id]);
   return (
     <Modal onClose={onClose} wide>
-      <CameraFeed cam={cam} detections={detections} streamUrl={stream} large />
+      <CameraFeed cam={cam} clip={clip} detections={detections} streamUrl={stream} large />
+      {clip && !stream && cam.status !== "offline" && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-black/[0.06] bg-black/[0.02] px-6 py-2 text-[11.5px] text-muted">
+          <span><b className="text-ink">Footage:</b> {clip.place}, Bengaluru — recorded {clip.light === "night" ? "at night" : clip.light === "dusk" ? "at dusk" : "by day"}</span>
+          <span><b className="text-ink">Boxes:</b> YOLO11s object detection + ByteTrack, run on this footage</span>
+          <a href={clip.source} target="_blank" rel="noreferrer" className="font-semibold text-brand hover:underline">
+            “{clip.title}” · {clip.author} · {clip.license}
+          </a>
+        </div>
+      )}
       <div className="grid gap-5 p-6 md:grid-cols-[1fr_1.3fr]">
         <div>
           <div className="flex items-center gap-2">
@@ -591,6 +614,28 @@ function CameraModal({ cam, detections, stream, onStream, onReview, onClose }:
         </div>
       </div>
     </Modal>
+  );
+}
+
+function FootageNote() {
+  return (
+    <details className="mt-4 rounded-2xl border border-black/10 bg-white px-4 py-3 text-[12px] text-muted shadow-sm">
+      <summary className="cursor-pointer font-semibold text-ink">About these feeds</summary>
+      <p className="mt-2 leading-relaxed">
+        Each feed plays real street footage recorded in Bengaluru in 2024–25 and published on Wikimedia Commons, standing in
+        for the camera&apos;s stream; where a camera is named after a place we have footage of (Brigade Road, MG Road, Hebbal,
+        Banashankari, Shivajinagar, Mekhri Circle), it shows that place. The boxes are real detections from YOLO11s with
+        ByteTrack tracking, computed on that footage. Face and plate matches come from the matcher and are never drawn on
+        anyone in the picture — nobody filmed here is a registry person.
+      </p>
+      <ul className="mt-2 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
+        {CLIPS.map((c) => (
+          <li key={c.slug} className="truncate">
+            <a href={c.source} target="_blank" rel="noreferrer" className="hover:text-brand">“{c.title}”</a> — {c.author}, {c.license}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

@@ -111,7 +111,7 @@ metric or endpoint changes.
 
 | Layer | Technologies |
 | :--- | :--- |
-| **Frontend UI** | Next.js 16 (App Router), React 19, Turbopack, Tailwind CSS v4, Framer Motion, Recharts, Lucide Icons, React Force Graph, Google Maps JavaScript API with a keyless Leaflet fallback |
+| **Frontend UI** | Next.js 16 (App Router), React 19, Turbopack, Tailwind CSS v4, Framer Motion, Recharts, Lucide Icons, React Force Graph, deck.gl over MapLibre (keyless CARTO / Esri basemaps) |
 | **Backend API Engine** | Python 3.11, Flask, Pandas, NumPy, Scikit-learn, NetworkX, SciPy |
 | **AI LLM Integration** | Groq (`llama-3.3-70b-versatile`), NVIDIA API (`minimaxai/minimax-m3`) |
 | **Database & Corpus** | 26 Relational Database Tables (FIRs, Accused, Act/Section, Chargesheets, Courts, Criminals, Officers, Victims, Vehicles, Missing Persons) |

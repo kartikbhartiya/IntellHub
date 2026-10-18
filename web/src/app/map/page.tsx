@@ -4,25 +4,32 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Box, Map as MapIcon, Layers as LayersIcon, Satellite, Moon, Flame, Hexagon, MapPin, Radar, Cctv, BellRing,
+  Box, Layers as LayersIcon, Satellite, Moon, Sun, Flame, Hexagon, MapPin, Radar, Cctv, BellRing,
   Expand, Shrink, Play, Pause, Search, X, Clapperboard, Footprints, Crosshair, TrendingUp, Clock, Building2,
+  PanelRightClose, PanelRightOpen,
 } from "lucide-react";
 import { getJSON, ApiError } from "@/lib/api";
 import { useNow } from "@/lib/alerts";
-import type { Camera, Incident, Layers, MapMode, TrailPoint, ViewStats } from "./map-libre";
+import type { Camera, Incident, Layers, MapMode, MapTheme, TrailPoint, ViewStats } from "./map-deck";
 
-// MapLibre touches `window` at import.
-const MapLibreMap = dynamic(() => import("./map-libre"), { ssr: false });
+// deck.gl and MapLibre touch `window` at import.
+const DeckMap = dynamic(() => import("./map-deck"), { ssr: false });
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const MODES: { id: MapMode; label: string; icon: any }[] = [
-  { id: "3d", label: "3D city", icon: Box },
-  { id: "2d", label: "2D", icon: MapIcon },
+  { id: "3d", label: "3D", icon: Box },
+  { id: "2d", label: "Heatmap", icon: Flame },
   { id: "districts", label: "Districts", icon: LayersIcon },
   { id: "satellite", label: "Satellite", icon: Satellite },
-  { id: "night", label: "Night", icon: Moon },
 ];
+
+// Old links still say mode=night; that view is now the dark 3D map.
+const parseMode = (m: string | null): MapMode =>
+  m === "2d" || m === "districts" || m === "satellite" ? m : "3d";
+
+const THEME_KEY = "ksp.map.theme";
+const MAP_H = "max(520px, min(74vh, 780px))";
 
 const METRICS: { id: string; label: string; unit: string }[] = [
   { id: "cases", label: "Cases", unit: "cases" },
@@ -40,7 +47,13 @@ const PRESETS: Record<MapMode, Layers> = {
   "2d": { heat: true, hex: false, points: true, zones: true, kde: true, cameras: true, alerts: true },
   districts: { heat: false, hex: false, points: false, zones: false, kde: false, cameras: false, alerts: false },
   satellite: { heat: true, hex: false, points: true, zones: false, kde: true, cameras: true, alerts: true },
-  night: { heat: true, hex: true, points: true, zones: false, kde: true, cameras: true, alerts: true },
+};
+
+const LEGEND = {
+  hex: "linear-gradient(90deg,#0198bd,#49e3ce,#d8feb5,#feedb1,#fead54,#d1374e)",
+  heat: "linear-gradient(90deg,#225ea8,#1d91c0,#41b6c4,#fed976,#fd8d3c,#e31a1c)",
+  dark: "linear-gradient(90deg,#162850,#1e5a96,#2896be,#6ecdb4,#f0e178)",
+  light: "linear-gradient(90deg,#e8eefc,#9db8f2,#5b86e5,#3457c4,#1c2f86)",
 };
 
 const fmtHour = (h: number) => `${String(h).padStart(2, "0")}:00`;
@@ -49,8 +62,9 @@ function MapInner() {
   const params = useSearchParams();
   const router = useRouter();
 
-  const [mode, setMode] = useState<MapMode>((params.get("mode") as MapMode) || "3d");
-  const [layers, setLayers] = useState<Layers>(PRESETS[((params.get("mode") as MapMode) || "3d")] || PRESETS["3d"]);
+  const [mode, setMode] = useState<MapMode>(parseMode(params.get("mode")));
+  const [theme, setTheme] = useState<MapTheme>("dark");
+  const [layers, setLayers] = useState<Layers>(PRESETS[parseMode(params.get("mode"))]);
   const [raw, setRaw] = useState<Incident[]>([]);
   const [meta, setMeta] = useState<{ crime_types: string[]; districts: string[]; statuses: string[] }>({ crime_types: [], districts: [], statuses: [] });
   const [geo, setGeo] = useState<any>(null);
@@ -83,9 +97,12 @@ function MapInner() {
   const [tour, setTour] = useState(0);
   const [search, setSearch] = useState("");
   const [full, setFull] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [refit, setRefit] = useState(0);
   const [layersOpen, setLayersOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const key = useRef(0);
+  const workspace = useRef<HTMLDivElement>(null);
 
   const switchMode = (m: MapMode) => {
     setMode(m);
@@ -252,18 +269,82 @@ function MapInner() {
     if (inc) return setFlyTo({ lat: inc.lat, lng: inc.lng, zoom: inc.case_id === s ? 16 : 13, key: ++key.current });
   };
 
-  const toggleFull = () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
-    else document.exitFullscreen?.().catch(() => {});
-    setFull((f) => !f);
-  };
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem(THEME_KEY);
+      if (t === "dark" || t === "light") setTheme(t);
+    } catch {}
+  }, []);
+  const toggleTheme = () => setTheme((t) => {
+    const n = t === "dark" ? "light" : "dark";
+    try { localStorage.setItem(THEME_KEY, n); } catch {}
+    return n;
+  });
+
+  // ------------------------------------------------------------------ full screen
+  // The map and its panel go full screen together through the Fullscreen API. `full`
+  // follows the browser's own state, so Esc, the exit button and F all agree. Where the
+  // API is missing (iPhone Safari) the same layout is shown as an in-page overlay.
+  const enterFull = useCallback(async () => {
+    setFull(true);
+    const el = workspace.current;
+    if (el && document.fullscreenEnabled && !document.fullscreenElement) {
+      try { await el.requestFullscreen({ navigationUI: "hide" }); } catch { /* the overlay still covers the page */ }
+    }
+  }, []);
+  const exitFull = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    setFull(false);
+  }, []);
+
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setFull(false);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t?.closest?.("input, textarea, select, [contenteditable=true]")) return;
+      // Browsers usually swallow Esc to leave native full screen themselves (and we hear
+      // it through fullscreenchange); when the key does reach the page, leave anyway.
+      if (e.key === "Escape" && full) exitFull();
+      if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.altKey) (full ? exitFull : enterFull)();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [full, enterFull, exitFull]);
+
+  // The stage changes size on entering or leaving full screen (and when the panel is
+  // hidden); frame the whole state again for whoever is watching.
+  const stageKey = `${full}-${panelOpen}`;
+  const lastStage = useRef(stageKey);
+  useEffect(() => {
+    if (lastStage.current === stageKey) return;
+    lastStage.current = stageKey;
+    setRefit((r) => r + 1);
+  }, [stageKey]);
+
+  // The page behind the overlay must not scroll.
+  useEffect(() => {
+    if (!full) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [full]);
 
   const L = (k: keyof Layers, label: string, Icon: any) => (
     <button
       key={k}
       onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
       className={`flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[12px] font-medium transition-all ${
-        layers[k] ? "bg-ink text-white" : "bg-black/[0.04] text-muted hover:text-ink"
+        layers[k] ? "bg-[#b07d16] text-white"
+          : theme === "dark" || mode === "satellite" ? "bg-white/[0.06] text-white/60 hover:text-white" : "bg-black/[0.04] text-muted hover:text-ink"
       }`}
     >
       <Icon className="h-3.5 w-3.5" /> {label}
@@ -272,56 +353,52 @@ function MapInner() {
 
   const recentAlerts = alerts.filter((a) => !district || a.district === district).slice(0, 5);
 
-  return (
-    <div className={full ? "fixed inset-0 z-[60] overflow-auto bg-[#f4f4f6] p-4" : "space-y-4"}>
-      {/* ------------------------------------------------------------ header */}
-      {!full && (
-        <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand">
-              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-crimson opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-crimson" /></span>
-              Live crime intelligence · Karnataka
-            </div>
-            <h1 className="text-display mt-1 text-4xl font-bold tracking-tight text-ink">Crime Map</h1>
-            <p className="mt-1 text-[14px] text-muted">
-              {raw.length ? `${raw.length.toLocaleString()} FIRs` : "Loading FIRs"} across all 31 districts, {cameras.length || "…"} cameras, live
-              face and plate alerts — in 3D, 2D, by district or from the air.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-full border border-black/10 bg-white p-1 shadow-sm">
-              {MODES.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => switchMode(m.id)}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-all ${
-                    mode === m.id ? "bg-ink text-white shadow" : "text-muted hover:text-ink"
-                  }`}
-                >
-                  <m.icon className="h-3.5 w-3.5" /> {m.label}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => { switchMode("3d"); setTour((t) => t + 1); }}
-              className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-ink shadow-sm hover:border-brand/40"
-              title="Fly the busiest districts in 3D"
-            >
-              <Clapperboard className="h-4 w-4 text-brand" /> Tour
-            </button>
-            <button onClick={toggleFull} className="grid h-9 w-9 place-items-center rounded-full border border-black/10 bg-white shadow-sm hover:border-brand/40" title="Full screen">
-              {full ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}
-            </button>
-          </div>
-        </header>
-      )}
+  const dark = theme === "dark" || mode === "satellite";
+  const glass = dark ? "border-white/10 bg-[#0d1220]/85 text-white" : "border-black/10 bg-white/95 text-ink";
+  const legend = mode === "districts" ? LEGEND[dark ? "dark" : "light"] : layers.hex && !layers.heat ? LEGEND.hex : LEGEND.heat;
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+  return (
+    <div className="space-y-4">
+      {/* ------------------------------------------------------------ header */}
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-brand">
+            <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-crimson opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-crimson" /></span>
+            Live crime intelligence · Karnataka
+          </div>
+          <h1 className="text-display mt-1 text-4xl font-bold tracking-tight text-ink">Crime Map</h1>
+          <p className="mt-1 text-[14px] text-muted">
+            {raw.length ? `${raw.length.toLocaleString()} FIRs` : "Loading FIRs"} across all 31 districts, {cameras.length || "…"} cameras, live
+            face and plate alerts — in 3D, as a heatmap, by district or from the air.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => { switchMode("3d"); setTour((t) => t + 1); }}
+            className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-ink shadow-sm hover:border-brand/40"
+            title="Fly the busiest districts in 3D"
+          >
+            <Clapperboard className="h-4 w-4 text-brand" /> Tour
+          </button>
+          <button onClick={enterFull}
+                  className="flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:bg-black"
+                  title="Present the map full screen (F)">
+            <Expand className="h-4 w-4" /> Full screen
+          </button>
+        </div>
+      </header>
+
+      <div
+        ref={workspace}
+        style={{ "--map-h": MAP_H } as React.CSSProperties}
+        className={full ? "fixed inset-0 z-[200] flex gap-3 bg-[#070a12] p-3" : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]"}
+      >
         {/* ------------------------------------------------------------ map */}
-        <div className="relative overflow-hidden rounded-[1.6rem] border border-black/10 bg-[#dfe6ee] shadow-[0_20px_60px_-30px_rgba(17,20,32,0.35)]"
-             style={{ height: full ? "calc(100vh - 2rem)" : "min(74vh, 780px)", minHeight: 520 }}>
-          <MapLibreMap
+        <div className={`relative min-w-0 overflow-hidden border shadow-[0_20px_60px_-30px_rgba(17,20,32,0.35)] ${
+               full ? "flex-1 rounded-[1.25rem] border-white/10" : "h-[var(--map-h)] rounded-[1.6rem] border-black/10"}`}>
+          <DeckMap
             mode={mode}
+            theme={theme}
             incidents={filtered}
             layers={layers}
             districtGeo={geo}
@@ -337,15 +414,61 @@ function MapInner() {
             flyTo={flyTo}
             fitDistrict={fitDistrict}
             tour={tour}
+            refit={refit}
             onSelectDistrict={selectDistrict}
             onOpenCase={onOpenCase}
             onOpenCamera={onOpenCamera}
             onViewStats={setView}
           />
 
+          {/* top-right: view switcher, theme, full screen */}
+          <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-wrap items-start justify-end gap-2 sm:left-auto">
+            <div className={`pointer-events-auto flex max-w-full overflow-x-auto rounded-2xl border p-1 shadow-lg backdrop-blur no-scrollbar ${glass}`}>
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => switchMode(m.id)}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12.5px] font-semibold transition-all ${
+                    mode === m.id ? "bg-[#b07d16] text-white shadow" : dark ? "text-white/70 hover:text-white" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <m.icon className="h-3.5 w-3.5" /> {m.label}
+                </button>
+              ))}
+            </div>
+            {mode !== "satellite" && (
+              <button onClick={toggleTheme} title={theme === "dark" ? "Light map" : "Dark map"}
+                      className={`pointer-events-auto grid h-[42px] w-[42px] place-items-center rounded-2xl border shadow-lg backdrop-blur ${glass}`}>
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            )}
+            {full ? (
+              <>
+                <button onClick={() => { switchMode("3d"); setTour((t) => t + 1); }} title="Fly the busiest districts in 3D"
+                        className={`pointer-events-auto flex h-[42px] items-center gap-1.5 rounded-2xl border px-3 text-[12.5px] font-semibold shadow-lg backdrop-blur ${glass}`}>
+                  <Clapperboard className="h-4 w-4 text-[#f5be50]" /> Tour
+                </button>
+                <button onClick={() => setPanelOpen((o) => !o)} title={panelOpen ? "Hide the insight panel" : "Show the insight panel"}
+                        className={`pointer-events-auto flex h-[42px] items-center gap-1.5 rounded-2xl border px-3 text-[12.5px] font-semibold shadow-lg backdrop-blur ${glass}`}>
+                  {panelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />} {panelOpen ? "Hide panel" : "Insights"}
+                </button>
+                <button onClick={exitFull} title="Exit full screen (Esc)"
+                        className="pointer-events-auto flex h-[42px] items-center gap-2 rounded-2xl bg-crimson px-3.5 text-[12.5px] font-bold text-white shadow-lg hover:brightness-110">
+                  <Shrink className="h-4 w-4" /> Exit full screen
+                  <kbd className="rounded bg-white/20 px-1.5 py-px font-mono text-[10px] font-semibold">Esc</kbd>
+                </button>
+              </>
+            ) : (
+              <button onClick={enterFull} title="Full screen (F)"
+                      className={`pointer-events-auto grid h-[42px] w-[42px] place-items-center rounded-2xl border shadow-lg backdrop-blur ${glass}`}>
+                <Expand className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           {/* top-left: hotspot chip + search */}
-          <div className="pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-2">
-            <div className="pointer-events-auto flex items-center gap-2 rounded-2xl bg-[#0d1220]/90 px-3 py-2 text-white shadow-lg backdrop-blur">
+          <div className="pointer-events-none absolute left-3 top-[68px] flex flex-col items-start gap-2 sm:top-3">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0d1220]/90 px-3 py-2 text-white shadow-lg backdrop-blur">
               <Flame className="h-4 w-4 text-[#f5b13d]" />
               <span className="text-[12.5px] font-semibold">Hotspot Intel</span>
               <span className="rounded-md bg-white/15 px-1.5 text-[11px] font-bold">{(view?.count ?? filtered.length).toLocaleString()}</span>
@@ -357,11 +480,11 @@ function MapInner() {
             </div>
             <form
               onSubmit={(e) => { e.preventDefault(); doSearch(search); }}
-              className="pointer-events-auto flex w-[min(78vw,300px)] items-center gap-2 rounded-2xl border border-black/10 bg-white/95 px-3 py-2 shadow-lg backdrop-blur"
+              className={`pointer-events-auto flex w-[min(78vw,300px)] items-center gap-2 rounded-2xl border px-3 py-2 shadow-lg backdrop-blur ${glass}`}
             >
-              <Search className="h-4 w-4 text-faint" />
+              <Search className={`h-4 w-4 ${dark ? "text-white/45" : "text-faint"}`} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="District, station, camera, FIR no…"
-                     className="min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-faint focus:outline-none" />
+                     className={`min-w-0 flex-1 bg-transparent text-[13px] focus:outline-none ${dark ? "text-white placeholder:text-white/40" : "text-ink placeholder:text-faint"}`} />
             </form>
             {tracking && (
               <div className="pointer-events-auto w-[min(78vw,300px)] rounded-2xl border border-crimson/25 bg-white/95 p-3 shadow-lg backdrop-blur">
@@ -386,10 +509,10 @@ function MapInner() {
             )}
           </div>
 
-          {/* layers */}
+          {/* layers + legend */}
           <div className="absolute bottom-3 left-3 flex flex-col items-start gap-2">
             {layersOpen && (
-              <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-black/10 bg-white/95 p-2 shadow-xl backdrop-blur">
+              <div className={`grid grid-cols-2 gap-1.5 rounded-2xl border p-2 shadow-xl backdrop-blur ${glass}`}>
                 {L("heat", "Heatmap", Flame)}
                 {L("hex", "3D columns", Hexagon)}
                 {L("points", "FIRs", MapPin)}
@@ -399,23 +522,23 @@ function MapInner() {
                 {L("alerts", "Live alerts", BellRing)}
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => setLayersOpen((o) => !o)}
-                      className="flex items-center gap-2 rounded-2xl bg-[#0d1220]/90 px-3 py-2 text-[12.5px] font-semibold text-white shadow-lg backdrop-blur">
+                      className="flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0d1220]/90 px-3 py-2 text-[12.5px] font-semibold text-white shadow-lg backdrop-blur">
                 <LayersIcon className="h-4 w-4" /> Layers
               </button>
-              <div className="flex items-center gap-2 rounded-2xl bg-white/95 px-3 py-2 text-[11px] text-muted shadow-lg backdrop-blur">
+              <div className={`flex items-center gap-2 rounded-2xl border px-3 py-2 text-[11px] shadow-lg backdrop-blur ${glass}`}>
                 {mode === "districts" ? (
                   <>
-                    <span>{metricInfo.label}</span>
-                    <span className="h-2 w-24 rounded-full" style={{ background: "linear-gradient(90deg,#e8eefc,#9db8f2,#5b86e5,#3457c4,#1c2f86)" }} />
-                    <span>{Math.round(rankMax).toLocaleString()}</span>
+                    <span className="opacity-75">{metricInfo.label}</span>
+                    <span className="h-2 w-24 rounded-full" style={{ background: legend }} />
+                    <span className="opacity-75">{Math.round(rankMax).toLocaleString()}</span>
                   </>
                 ) : (
                   <>
-                    <span>Severity</span>
-                    <span className="h-2 w-24 rounded-full" style={{ background: "linear-gradient(90deg,#0a9d57,#e7b43c,#f08a24,#dc2b25,#7a0c2e)" }} />
-                    <span className="hidden sm:inline">· <span className="text-[#965fff]">●</span> Face <span className="text-[#2f8cff]">●</span> ANPR <span className="text-[#e7b43c]">●</span> PTZ</span>
+                    <span className="opacity-75">{layers.hex && !layers.heat ? "Density" : "Intensity"}</span>
+                    <span className="h-2 w-24 rounded-full" style={{ background: legend }} />
+                    <span className="hidden opacity-75 sm:inline">· <span className="text-[#965fff]">●</span> Face <span className="text-[#2f8cff]">●</span> ANPR <span className="text-[#e7b43c]">●</span> PTZ <span className="text-[#28b9a8]">●</span> CCTV</span>
                   </>
                 )}
               </div>
@@ -423,14 +546,17 @@ function MapInner() {
           </div>
 
           {loading && (
-            <div className="absolute inset-0 grid place-items-center bg-white/40 backdrop-blur-[2px]">
+            <div className={`absolute inset-0 grid place-items-center backdrop-blur-[2px] ${dark ? "bg-black/30" : "bg-white/40"}`}>
               <div className="rounded-2xl bg-white px-4 py-3 text-[13px] font-medium text-muted shadow-lg">Loading 18,000 FIRs…</div>
             </div>
           )}
         </div>
 
         {/* ------------------------------------------------------------ side panel */}
-        <aside className="space-y-3 lg:max-h-[min(74vh,780px)] lg:overflow-y-auto lg:pr-1">
+        {(!full || panelOpen) && (
+        <aside className={full
+          ? "w-[340px] shrink-0 space-y-3 overflow-y-auto overscroll-contain rounded-[1.25rem] max-md:absolute max-md:inset-y-3 max-md:right-3 max-md:z-20 max-md:w-[min(340px,86vw)]"
+          : "space-y-3 lg:h-[var(--map-h)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"}>
           {/* filters */}
           <section className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
             <h3 className="text-[12px] font-semibold uppercase tracking-[0.16em] text-faint">Filters</h3>
@@ -555,6 +681,7 @@ function MapInner() {
             )}
           </section>
         </aside>
+        )}
       </div>
 
       {/* ------------------------------------------------------------ KPI strip */}

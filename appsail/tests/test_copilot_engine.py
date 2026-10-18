@@ -137,6 +137,22 @@ def test_people_search_honours_registry_flags(cache):
     assert r["total_matching"] == expected
 
 
+def test_worst_officers_come_lowest_first_above_a_caseload_floor(cache):
+    r = E.tool_search_officers(cache, order="asc")
+    rates = [o["closure_rate"] for o in r["officers"]]
+    assert rates == sorted(rates)
+    assert all(o["cases_assigned"] >= E.MIN_CASES_FOR_RANKING for o in r["officers"])
+    assert r["caution"] and r["state_avg_closure_rate"]
+
+
+def test_optional_tool_arguments_accept_null(cache):
+    # Groq validates tool calls server-side and drops the whole turn when a model says
+    # "no filter" as null on a plain string field.
+    spec = next(t["function"] for t in E.tool_specs() if t["function"]["name"] == "search_officers")
+    assert "null" in spec["parameters"]["properties"]["district"]["type"]
+    assert E.run_tool("search_officers", {"district": None, "order": "asc"}, cache)["total_matching"] > 0
+
+
 def test_every_tool_survives_empty_arguments(cache):
     for name, (fn, _d, _p, required) in E.TOOLS.items():
         if fn is None:
@@ -159,6 +175,7 @@ def test_knowledge_answers_a_definition_with_the_definition():
     ("which crimes are spiking?", "trend"),
     ("what is a rowdy sheeter?", "register"),
     ("how accurate is the recidivism model?", "roc_auc"),
+    ("which officer is doing the worst? who should I suspend?", "lowest closure rate first"),
 ])
 def test_offline_answers_are_specific(offline, q, expect):
     r = _ask(q)

@@ -82,7 +82,7 @@ export function RichText({ text, onEntity, dark }: { text: string; onEntity: (id
 
 export function TraceStrip({ trace, mode, dark }: { trace?: AgentTraceStep[]; mode?: string; dark?: boolean }) {
   if (!trace?.length && !mode) return null;
-  const engine = mode?.startsWith("llm:") ? `Llama reasoning · ${mode.slice(4)}` : mode === "deterministic" ? "Records engine" : null;
+  const engine = mode?.startsWith("llm:") ? `AI reasoning · ${mode.slice(4)}` : mode === "deterministic" ? "Records engine" : null;
   return (
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
       {engine && (

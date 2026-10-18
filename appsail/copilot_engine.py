@@ -1065,23 +1065,42 @@ def tool_get_officer(cache, officer_ref=None, **_):
     return out
 
 
-def tool_search_officers(cache, district=None, rank=None, specialization=None, sort_by="closure_rate", limit=8, **_):
+# Below this many cases a closure rate is mostly noise; a worst-first list would otherwise
+# be led by whoever happened to draw two hard cases.
+MIN_CASES_FOR_RANKING = 15
+
+
+def tool_search_officers(cache, district=None, rank=None, specialization=None, sort_by="closure_rate", order="desc",
+                         min_cases=None, limit=8, **_):
     idx = _index(cache)
     if idx is None:
         return {"error": "corpus not loaded"}
     df = pd.DataFrame(list(idx.officers.values()))
     if df.empty:
         return {"total_matching": 0}
+    state_avg = float(df["closure_rate"].mean()) if "closure_rate" in df else None
     for col, val in (("district", district), ("rank", rank), ("specialization", specialization)):
         if val:
             df = df[df[col].astype(str).str.lower().str.contains(str(val).lower(), na=False)]
     key = sort_by if sort_by in ("closure_rate", "cases_assigned", "commendations") else "closure_rate"
-    df = df.sort_values(key, ascending=False)
-    return {"total_matching": int(len(df)), "sorted_by": key,
-            "by_rank": df["rank"].value_counts().to_dict() if len(df) else {},
-            "officers": [_rec(r, ["officer_id", "name", "rank", "station", "district", "specialization",
-                                  "cases_assigned", "closure_rate", "commendations"])
-                         for r in df.head(max(1, min(int(limit or 8), 20))).to_dict("records")]}
+    asc = str(order).lower() == "asc"
+    if min_cases is None and asc and key == "closure_rate":
+        min_cases = MIN_CASES_FOR_RANKING
+    if min_cases:
+        df = df[df["cases_assigned"] >= int(min_cases)]
+    df = df.sort_values(key, ascending=asc)
+    out = {"total_matching": int(len(df)), "sorted_by": key, "order": "asc" if asc else "desc",
+           "min_cases": int(min_cases) if min_cases else None,
+           "state_avg_closure_rate": round(state_avg, 3) if state_avg is not None else None,
+           "by_rank": df["rank"].value_counts().to_dict() if len(df) else {},
+           "officers": [_rec(r, ["officer_id", "name", "rank", "station", "district", "specialization",
+                                 "cases_assigned", "closure_rate", "commendations"])
+                        for r in df.head(max(1, min(int(limit or 8), 20))).to_dict("records")]}
+    if asc:
+        out["caution"] = ("A closure rate alone does not establish poor work: it moves with case mix (cyber and "
+                          "homicide cases close slower), station workload, tenure and transfers. Use it to pick files "
+                          "to review; suspension is a disciplinary decision for a departmental inquiry.")
+    return out
 
 
 REGISTRY_FIELDS = {
@@ -1505,9 +1524,12 @@ TOOLS = {
                        "district": {"type": "string"}, "crime_type": {"type": "string"}, "limit": {"type": "integer"}}, []),
     "get_officer": (tool_get_officer, "One police officer by KGID or name: rank, station, specialization, closure rate, commendations and the cases they investigate.",
                     {"officer_ref": {"type": "string"}}, ["officer_ref"]),
-    "search_officers": (tool_search_officers, "List/rank officers by district, rank or specialization, sorted by closure_rate, cases_assigned or commendations.",
+    "search_officers": (tool_search_officers, "List/rank officers by district, rank or specialization, sorted by closure_rate, cases_assigned or commendations. order=asc lists the WORST / lowest first (who is doing worst, weakest, underperforming); desc lists the best first. Results carry the state average closure rate for context.",
                         {"district": {"type": "string"}, "rank": {"type": "string"}, "specialization": {"type": "string"},
-                         "sort_by": {"type": "string"}, "limit": {"type": "integer"}}, []),
+                         "sort_by": {"type": "string", "enum": ["closure_rate", "cases_assigned", "commendations"]},
+                         "order": {"type": "string", "enum": ["desc", "asc"], "description": "asc = lowest/worst first"},
+                         "min_cases": {"type": "integer", "description": "ignore officers with fewer cases (default 15 for worst-first)"},
+                         "limit": {"type": "integer"}}, []),
     "search_registry": (tool_search_registry, "Search a side registry: vehicles (stolen vehicles), cybercrime (UPI/bank/phone/IP/URL/wallet identifiers), missing (missing persons), courts (trials), complaints (Dial-112 calls), cctv. Free-text query matches any field.",
                         {"kind": {"type": "string", "enum": sorted(REGISTRY_FIELDS)}, "query": {"type": "string"},
                          "district": {"type": "string"}, "status": {"type": "string"}, "limit": {"type": "integer"}}, ["kind"]),
@@ -1534,10 +1556,22 @@ TOOLS = {
 }
 
 
+def _nullable(prop):
+    """Models often say "no filter" as null. Groq validates tool calls against the schema
+    server-side and rejects the whole turn on a null string, so optional fields allow it."""
+    out = dict(prop)
+    if isinstance(out.get("type"), str):
+        out["type"] = [out["type"], "null"]
+    if "enum" in out:
+        out["enum"] = list(out["enum"]) + [None]
+    return out
+
+
 def tool_specs():
     return [{"type": "function", "function": {
         "name": name, "description": desc,
-        "parameters": {"type": "object", "properties": props, "required": req}}}
+        "parameters": {"type": "object", "required": req,
+                       "properties": {k: (v if k in req else _nullable(v)) for k, v in props.items()}}}}
         for name, (_fn, desc, props, req) in TOOLS.items()]
 
 
@@ -1545,8 +1579,9 @@ def run_tool(name, args, cache):
     spec = TOOLS.get(name)
     if not spec or spec[0] is None:
         return {"error": f"unknown tool {name}"}
+    args = {k: v for k, v in (args or {}).items() if v is not None}
     try:
-        return spec[0](cache, **(args or {}))
+        return spec[0](cache, **args)
     except TypeError as e:
         return {"error": f"bad arguments for {name}: {e}"}
     except Exception as e:
@@ -1703,8 +1738,13 @@ def plan(text, idx, ents):
         return [("search_people", args)]
 
     if _cue(low, ("officer", "inspector", "constable", "dysp", " si ", "io ")):
-        return [("search_officers", {"district": filters.get("district"),
-                                     "sort_by": "cases_assigned" if "most cases" in low else "closure_rate"})]
+        worst = _cue(low, ("worst", "lowest", "least", "poor", "weak", "bad ", "badly", "underperform", "under-perform",
+                           "bottom", "lagging", "struggling", "suspend", "disciplin", "action against", "sack", "fire "))
+        args = {"district": filters.get("district"),
+                "sort_by": "cases_assigned" if "most cases" in low else "closure_rate"}
+        if worst:
+            args["order"] = "asc"
+        return [("search_officers", args)]
     if filters.get("crime_type", "").startswith("Cyber") and _cue(low, ("money", "lost", "amount", "rupee", " rs", "lakh",
                                                                         "crore", "upi", "bank", "victims", "ring")):
         return [("insight", {"topic": "cyber_rings"})] if "ring" in low else \
@@ -1960,10 +2000,20 @@ def _say_officers(r):
     offs = r.get("officers") or []
     if not offs:
         return "No officers match."
-    return (f"**{r['total_matching']} officers** (ranked by {r['sorted_by'].replace('_', ' ')}):\n"
-            + "\n".join(f"- {o.get('name')} ({o.get('officer_id')}), {o.get('rank')}, {o.get('station')}: "
-                        f"{round((o.get('closure_rate') or 0) * 100)}% closure, {o.get('cases_assigned')} cases"
-                        for o in offs[:8]))
+    metric = r["sorted_by"].replace("_", " ")
+    if r.get("order") == "asc":
+        floor = f" with at least {r['min_cases']} cases" if r.get("min_cases") else ""
+        head = f"**Lowest {metric} first** — {r['total_matching']} officers{floor}"
+    else:
+        head = f"**{r['total_matching']} officers**, highest {metric} first"
+    avg = r.get("state_avg_closure_rate")
+    if avg is not None:
+        head += f" (state average {round(avg * 100)}% closure)"
+    body = "\n".join(f"- {o.get('name')} ({o.get('officer_id')}), {o.get('rank')}, {o.get('station')}: "
+                     f"{round((o.get('closure_rate') or 0) * 100)}% closure, {o.get('cases_assigned')} cases"
+                     for o in offs[:8])
+    tail = f"\n\n{r['caution']}" if r.get("caution") else ""
+    return f"{head}:\n{body}{tail}"
 
 
 def _say_registry(r):
@@ -2432,6 +2482,10 @@ def _system_prompt(lang_directive, briefing, page, context):
         "LIMITS YOU KEEP\n"
         "- No output is evidence. Never say a person is guilty, will reoffend or should be arrested; a risk index orders "
         "attention and establishes nothing about a person. Ranked lists of people stay in the gated registry.\n"
+        "- Personnel questions (who to suspend, transfer, punish or reward): answer the data question exactly as "
+        "asked — 'worst' means lowest first (search_officers order=asc) — with each officer's caseload and the state "
+        "average, name the confounders (case mix, workload, tenure, small samples), and say a suspension is decided by "
+        "a departmental inquiry, not by a ranking. Point to the files to review; never name someone to suspend.\n"
         "- You search only the KSP IntelHub records. You do not look people up on the internet, in Aadhaar or in any "
         "outside database, and you say so if asked.\n"
         "- The corpus is simulated CCTNS-shaped data; say so if asked whether the records are real.\n"
@@ -2465,18 +2519,28 @@ def _chat(providers, messages, tools):
         key = os.environ.get(p["key_env"], "")
         if not key or key.startswith(("nvapi-****", "gsk_****")):
             continue
-        try:
-            client = OpenAI(base_url=p["base_url"], api_key=key, timeout=LLM_TIMEOUT_S, max_retries=1)
-            kwargs = dict(model=os.environ.get(p["model_env"], p["model_default"]), messages=messages,
-                          temperature=0.2, max_tokens=900)
-            if tools:
-                kwargs["tools"] = tools
-                kwargs["tool_choice"] = "auto"
-            resp = client.chat.completions.create(**kwargs)
-            return resp.choices[0].message, p["name"]
-        except Exception as e:
-            LOG.warning("copilot provider %s failed: %s", p["name"], e)
-            continue
+        model = os.environ.get(p["model_env"], p["model_default"])
+        kwargs = dict(model=model, messages=messages, temperature=0.2, max_tokens=900)
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+        if "gpt-oss" in model:
+            # Reasoning tokens count against max_tokens and the per-minute budget; the
+            # tools do the heavy lifting, so a short think is enough.
+            kwargs["reasoning_effort"] = os.environ.get("COPILOT_REASONING_EFFORT", "low")
+        client = OpenAI(base_url=p["base_url"], api_key=key, timeout=LLM_TIMEOUT_S, max_retries=1)
+        for attempt in range(2):
+            try:
+                resp = client.chat.completions.create(**kwargs)
+                return resp.choices[0].message, p["name"]
+            except Exception as e:
+                # A tool call that fails the provider's schema check is a sampling slip, not
+                # an outage: one fresh sample usually gets it right.
+                if attempt == 0 and "tool_use_failed" in str(e):
+                    LOG.info("copilot provider %s rejected a tool call; retrying once", p["name"])
+                    continue
+                LOG.warning("copilot provider %s failed: %s", p["name"], e)
+                break
     return None, None
 
 
