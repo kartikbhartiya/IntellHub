@@ -316,26 +316,38 @@ def _norm_key(s):
     return re.sub(r"\s+", " ", (s or "").strip().lower())
 
 
-def detect_district(text, idx):
+DISTRICT_ALIASES = {
+    "bangalore rural": "Bengaluru Rural", "bengaluru rural": "Bengaluru Rural",
+    "bangalore urban": "Bengaluru Urban", "bangalore city": "Bengaluru Urban",
+    "bengaluru city": "Bengaluru Urban", "bangalore": "Bengaluru Urban", "bengaluru": "Bengaluru Urban",
+    "bengalooru": "Bengaluru Urban", "blr": "Bengaluru Urban", "mysore": "Mysuru",
+    "mangalore": "Dakshina Kannada", "mangaluru": "Dakshina Kannada", "hubli": "Dharwad",
+    "hubballi": "Dharwad", "belgaum": "Belagavi", "gulbarga": "Kalaburagi", "kalburgi": "Kalaburagi",
+    "bellary": "Ballari", "shimoga": "Shivamogga", "tumkur": "Tumakuru", "bijapur": "Vijayapura",
+    "chikmagalur": "Chikkamagaluru", "chikballapur": "Chikkaballapura", "hospet": "Vijayanagara",
+    "hosapete": "Vijayanagara", "hampi": "Vijayanagara", "coorg": "Kodagu", "madikeri": "Kodagu",
+    "karwar": "Uttara Kannada", "davangere": "Davanagere", "ramanagaram": "Ramanagara",
+    "chamarajanagar": "Chamarajanagara", "bagalkot": "Bagalkote", "raichuru": "Raichur",
+}
+
+
+def district_span(text, idx):
+    """(district, start, end) of the district named in text, longest match first."""
     low = (text or "").lower()
     best = None
-    for d in idx.districts:
-        dl = d.lower()
-        if re.search(r"(?<![a-z])" + re.escape(dl) + r"(?![a-z])", low) and (best is None or len(d) > len(best)):
-            best = d
-    if best:
-        return best
-    aliases = {"bangalore": "Bengaluru Urban", "bengaluru": "Bengaluru Urban", "mysore": "Mysuru",
-               "mangalore": "Dakshina Kannada", "mangaluru": "Dakshina Kannada", "hubli": "Dharwad",
-               "hubballi": "Dharwad", "belgaum": "Belagavi", "gulbarga": "Kalaburagi",
-               "bellary": "Ballari", "shimoga": "Shivamogga", "tumkur": "Tumakuru",
-               "bijapur": "Vijayapura", "chikmagalur": "Chikkamagaluru", "hospet": "Vijayanagara",
-               "hosapete": "Vijayanagara", "coorg": "Kodagu", "karwar": "Uttara Kannada",
-               "udupi": "Udupi"}
-    for a, d in aliases.items():
-        if re.search(r"(?<![a-z])" + a + r"(?![a-z])", low) and d in idx.districts:
-            return d
-    return None
+    names = [(d.lower(), d) for d in idx.districts] + list(DISTRICT_ALIASES.items())
+    for key, d in names:
+        if d not in idx.districts:
+            continue
+        m = re.search(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", low)
+        if m and (best is None or (m.end() - m.start()) > (best[2] - best[1])):
+            best = (d, m.start(), m.end())
+    return best
+
+
+def detect_district(text, idx):
+    sp = district_span(text, idx)
+    return sp[0] if sp else None
 
 
 def detect_crime(text, idx):
@@ -360,6 +372,77 @@ def detect_status(text):
         if any(s in low for s in syns):
             return st
     return None
+
+
+def crime_span(text, idx):
+    """(crime_type, start, end) of the crime named in text."""
+    low = (text or "").lower()
+    best = None
+    keys = [(ct.split("(")[0].strip().lower(), ct) for ct in idx.crime_types]
+    keys += [(syn, ct) for ct, syns in CRIME_SYNONYMS.items() if ct in idx.crime_types for syn in syns]
+    for key, ct in keys:
+        m = re.search(r"(?<![a-z])" + re.escape(key) + r"[a-z]*", low)
+        if m and (best is None or (m.end() - m.start()) > (best[2] - best[1])):
+            best = (ct, m.start(), m.end())
+    return best
+
+
+ELLIPSIS = re.compile(r"^\s*(?:(?:what|how)\s+about|and(?:\s+in)?|same\s+(?:for|in)|what\s+of|now(?:\s+for)?|also(?:\s+for)?|then|ok(?:ay)?\s+(?:and|now))\b", re.I)
+ANAPHORA = re.compile(r"\b(them|those|these|there|that district|that area|that place|same district|same crime|such cases|those cases|these cases)\b", re.I)
+
+
+def _rewrite_one(text, prev, idx):
+    """Rewrite one elliptical follow-up against the (already resolved) previous question."""
+    if not prev:
+        return text
+    words = len(re.findall(r"\w+", text))
+    cur_d, cur_c = district_span(text, idx), crime_span(text, idx)
+    cur_y = RE_YEAR.search(text)
+    prev_d, prev_c = district_span(prev, idx), crime_span(prev, idx)
+    prev_y = RE_YEAR.search(prev)
+    if ELLIPSIS.search(text) and words <= 9 and (cur_d or cur_c or cur_y):
+        # "what about Mysuru?" -> the previous question with the new value swapped in.
+        out = prev
+        edits = []
+        for cur, old, label in ((cur_d, prev_d, "in"), (cur_c, prev_c, ""), (cur_y, prev_y, "in")):
+            if not cur:
+                continue
+            val = cur[0] if isinstance(cur, tuple) else cur.group(1)
+            if old:
+                start, end = (old[1], old[2]) if isinstance(old, tuple) else old.span(1)
+                edits.append((start, end, val))
+            else:
+                out = f"{out.rstrip(' ?.')} {label} {val}".replace("  ", " ")
+        for start, end, val in sorted(edits, reverse=True):
+            out = out[:start] + val + out[end:]
+        return out
+    if ANAPHORA.search(text) or ELLIPSIS.search(text):
+        add = []
+        if not cur_c and prev_c:
+            add.append(prev_c[0])
+        if not cur_d and prev_d:
+            add.append(f"in {prev_d[0]}")
+        if not cur_y and prev_y:
+            add.append(f"in {prev_y.group(1)}")
+        if add:
+            return f"{text.rstrip(' ?.')} ({' '.join(add)})"
+    return text
+
+
+def rewrite_followup(text, history, idx):
+    """Resolve a follow-up that leans on earlier turns into a self-contained question.
+
+    Earlier user turns are resolved in order first, so a chain of follow-ups —
+    "how many murders in Mysuru in 2024", "what about Belagavi?", "and 2023?" — each
+    rewrite against the fully resolved question before them.
+    """
+    if idx is None:
+        return text
+    resolved = None
+    for h in history or []:
+        if h.get("role") == "user" and (h.get("content") or "").strip():
+            resolved = _rewrite_one(h["content"].strip(), resolved, idx)
+    return _rewrite_one(text, resolved, idx)
 
 
 def detect_station(text, idx):
@@ -1298,11 +1381,101 @@ def tool_describe_platform(cache, aspect="summary", **_):
     return copilot_knowledge.describe_live(aspect, cache)
 
 
+def tool_situation(cache, district=None, **_):
+    """What is happening now: recent volume and mix, alerts, forecast, live cameras."""
+    idx = _index(cache)
+    if idx is None:
+        return {"error": "corpus not loaded"}
+    f = idx.firs
+    d = detect_district(district, idx) if district else None
+    sel = f[f["district"] == d] if d else f
+    end = f["_ts"].max()
+    day = pd.Timedelta(days=1)
+    last7 = sel[sel["_ts"] > end - 7 * day]
+    prev7 = sel[(sel["_ts"] <= end - 7 * day) & (sel["_ts"] > end - 14 * day)]
+    last30 = sel[sel["_ts"] > end - 30 * day]
+    out = {"scope": d or "Karnataka", "records_up_to": f"{end:%Y-%m-%d}",
+           "last_7_days": int(len(last7)), "previous_7_days": int(len(prev7)),
+           "last_30_days": int(len(last30)),
+           "last_30_by_crime": last30["crime_type"].value_counts().head(5).to_dict(),
+           "last_30_killed": int(last30["fatalities"].fillna(0).sum()),
+           "last_30_injured": int(last30["injured"].fillna(0).sum()),
+           "open_cases_total": int((sel["status"] == "Under Investigation").sum()),
+           "latest_cases": [{"case_id": r["case_id"], "crime_type": r["crime_type"], "district": r["district"],
+                             "station": r.get("police_station"), "registered": str(r["timestamp"])[:16],
+                             "status": r["status"], "severity": _clean(r["severity_score"])}
+                            for _, r in sel.sort_values("_ts", ascending=False).head(4).iterrows()]}
+    if not d:
+        out["busiest_districts_30d"] = last30["district"].value_counts().head(4).to_dict()
+    else:
+        out["top_stations_30d"] = last30["police_station"].value_counts().head(3).to_dict()
+    al = [a for a in (cache.get("trend_alerts") or []) if not d or a.get("district") == d]
+    out["trend_alerts"] = al[:4]
+    fc = cache.get("forecast") or {}
+    src = (fc.get("by_district") or {}).get(d) if d else fc.get("overall")
+    if src:
+        out["forecast_next_week"] = {k: src.get(k) for k in ("next_week", "trend", "change_pct")}
+    disp = next((r for r in (cache.get("dispatch") or []) if r.get("district") == d), None) if d else None
+    if disp:
+        out["patrol"] = {k: disp.get(k) for k in ("risk_score", "risk_level", "recommended_officers")}
+    try:
+        import surveillance
+        a = surveillance.alerts(cache, None, district=d, limit=4)
+        cams = surveillance.cameras(cache, district=d)
+        out["live_cameras"] = {"cameras": len(cams["cameras"]),
+                               "online": sum(c["status"] == "online" for c in cams["cameras"]),
+                               "alerts_24h": a["counts"], "latest_alerts": [
+                                   {"time": x["time"][11:16] + " UTC", "camera": x["camera_name"], "priority": x["priority"],
+                                    "what": (f"{x['face_match']['person']['name']} ({x['face_match']['suspect_id']}) — "
+                                             f"{round(x['face_match']['similarity'] * 100)}% face match"
+                                             if x.get("face_match") else f"plate {x.get('plate_read')} → stolen "
+                                             f"{(x.get('plate_match') or {}).get('make_model')}"),
+                                    "reasons": x["reasons"]} for x in a["alerts"][:3]]}
+    except Exception as e:
+        LOG.warning("situation: camera summary unavailable (%s)", e)
+    return out
+
+
+def tool_sightings(cache, person_ref=None, plate=None, district=None, **_):
+    """CCTV / ANPR: where a person was last seen, reads of a plate, or live alerts in an area."""
+    import surveillance
+    idx = _index(cache)
+    if person_ref:
+        sid = resolve_suspect(person_ref, idx) if re.search(r"\d", str(person_ref)) else None
+        if not sid:
+            hits = [i for k, i in idx.names.get(_norm_key(person_ref), []) if k == "offender"]
+            sid = hits[0] if len(hits) == 1 else None
+        if not sid:
+            return {"error": f"'{person_ref}' does not resolve to one registered offender"}
+        t = surveillance.track(cache, None, sid)
+        return {"suspect_id": sid, "name": (t.get("person") or {}).get("name"),
+                "sightings_24h": len(t["sightings"]),
+                "sightings": [{"time": x["time"], "camera": x["camera_name"], "district": x["district"],
+                               "similarity": x["face_match"]["similarity"], "band": x["face_match"]["band"],
+                               "status": x["status"]} for x in t["sightings"][-8:]],
+                "note": t["note"]}
+    if plate:
+        r = surveillance.lookup_plate(cache, plate)
+        return {"query": plate, "registry_match": r["registry_match"],
+                "recent_reads": [{"time": x["time"], "camera": x["camera_name"], "read": x["plate_read"]}
+                                 for x in r["recent_reads"]]}
+    d = detect_district(district, idx) if district else None
+    a = surveillance.alerts(cache, None, district=d, limit=6)
+    return {"scope": d or "Karnataka", "counts_24h": a["counts"],
+            "alerts": [{"time": x["time"], "camera": x["camera_name"], "district": x["district"],
+                        "priority": x["priority"], "reasons": x["reasons"], "status": x["status"],
+                        "person": (x.get("face_match") or {}).get("suspect_id"),
+                        "name": ((x.get("face_match") or {}).get("person") or {}).get("name"),
+                        "plate": x.get("plate_read")} for x in a["alerts"]],
+            "policy": a["policy"]}
+
+
 # Tools that read one specific record; an answer built from them outranks a generic one.
-ENTITY_TOOLS = {"get_case", "get_person", "get_officer", "network", "search_registry"}
+ENTITY_TOOLS = {"get_case", "get_person", "get_officer", "network", "search_registry", "sightings"}
 
 NAV_ACTIONS = {"open_case", "open_suspect", "show_heatmap", "show_network", "show_dispatch",
-               "show_analytics", "show_models", "recent_cases", "show_registry", "show_anomalies"}
+               "show_analytics", "show_models", "recent_cases", "show_registry", "show_anomalies",
+               "show_surveillance"}
 
 
 TOOLS = {
@@ -1348,6 +1521,10 @@ TOOLS = {
                           {"topic": {"type": "string"}}, ["topic"]),
     "describe_platform": (tool_describe_platform, "Read the RUNNING system: aspect=routes (every live API endpoint and the role it needs), tables (every loaded data table with row counts and columns), pages (every screen), models (ML registry), sources (files the knowledge index covers), summary.",
                           {"aspect": {"type": "string", "enum": ["summary", "routes", "tables", "pages", "models", "sources"]}}, ["aspect"]),
+    "situation": (tool_situation, "What is going on right now in a district or statewide: last 7/30 days of FIRs and their mix, casualties, open cases, latest cases, trend spikes, next-week forecast, patrol risk and live CCTV/ANPR alerts. Use for open questions like 'what's happening in Bengaluru'.",
+                  {"district": {"type": "string"}}, []),
+    "sightings": (tool_sightings, "Live CCTV & ANPR network: where a registered person was last seen (face-match sightings, last 24h), reads of a number plate against the stolen-vehicle registry, or the current alert queue for a district.",
+                  {"person_ref": {"type": "string"}, "plate": {"type": "string"}, "district": {"type": "string"}}, []),
     "navigate": (None, "Move the officer's screen. Call at most once, only when showing a screen helps (e.g. after answering about a case, open it).",
                  {"action": {"type": "string", "enum": sorted(NAV_ACTIONS)},
                   "case_id": {"type": "string"}, "suspect_id": {"type": "string"}, "district": {"type": "string"},
@@ -1430,11 +1607,23 @@ def _cue(low, words):
     return any(w in low for w in words)
 
 
+SIGHT_CUES = ("last seen", "spotted", "sighting", "seen at", "seen in", "seen near", "whereabout", "where is",
+              "where was", "cctv", "camera", "anpr", "plate read", "number plate", "live alert", "surveillance",
+              "face match", "facial")
+SITUATION_CUES = ("going on", "happening", "situation", "what's up", "whats up", "update", "brief me", "briefing",
+                  "news", "right now", " rn", "currently", "today", "this week", "status of crime", "state of",
+                  "how is", "how's", "overview", "summary", "pulse", "latest in", "what is new", "what's new")
+
+
 def plan(text, idx, ents):
     """Ordered (tool, args) calls that a question needs."""
     low = _kannada_to_english(text or "").lower()
     text = _kannada_to_english(text or "")
     calls = []
+    sight = _cue(low, SIGHT_CUES)
+    if sight and (ents["suspects"] or ents["vehicles"]):
+        return ([("sightings", {"person_ref": p}) for p in ents["suspects"][:2]]
+                + [("sightings", {"plate": v}) for v in ents["vehicles"][:2]])
     for c in ents["cases"][:3]:
         calls.append(("get_case", {"case_ref": c}))
     people = list(ents["suspects"])
@@ -1473,6 +1662,12 @@ def plan(text, idx, ents):
                  if _cue(low, words)), None)
     if live:
         return [("describe_platform", {"aspect": live})]
+    if sight and not filters.get("crime_type"):
+        return [("sightings", {"district": filters.get("district")})]
+    if _cue(low, SITUATION_CUES) and not _cue(low, ("how many", "count", "which", "list", "show me", "model",
+                                                     "project", "platform", "intelhub", "page")) \
+            and not copilot_knowledge.is_platform_question(text):
+        return [("situation", {"district": filters.get("district")})]
     if copilot_knowledge.is_platform_question(text) or definitional and re.search(
             r"^\s*(what is|what's|what are|what does|define|meaning of|explain)\b.{0,12}\b(a |an |the )?"
             r"(rowdy|history.?sheet|fir|chargesheet|charge sheet|warrant|ipc|bns|cctns|mo\b|modus|io\b|"
@@ -1564,6 +1759,8 @@ def plan(text, idx, ents):
             return [("search_cases", dict(filters, sort_by=sort))]
     if _cue(low, ("summary", "overview", "situation", "status of crime", "brief me", "briefing", "statistics", "stats")):
         return [("insight", {"topic": "overview"})]
+    if filters.get("district") and len(filters) == 1:
+        return [("situation", {"district": filters["district"]})]
     return []
 
 
@@ -1980,9 +2177,85 @@ def _say_platform(r):
     return ("**What I know about myself right now:** " + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in r.items()) + ".")
 
 
+def _say_situation(r):
+    if r.get("error"):
+        return r["error"]
+    scope = r["scope"]
+    d7, p7 = r["last_7_days"], r["previous_7_days"]
+    delta = (f"{'up' if d7 > p7 else 'down' if d7 < p7 else 'flat'} from {p7} the week before" if p7 else "")
+    lines = [f"**{scope} right now: {d7} FIRs in the last 7 days**" + (f" ({delta})" if delta else "")
+             + f", {r['last_30_days']} in the last 30 (records up to {r['records_up_to']})."]
+    if r.get("last_30_by_crime"):
+        lines.append(f"- Mix (30 days): {_kv(r['last_30_by_crime'])} · {r['last_30_killed']} killed, {r['last_30_injured']} injured")
+    if r.get("busiest_districts_30d"):
+        lines.append(f"- Busiest districts: {_kv(r['busiest_districts_30d'], 4)}")
+    if r.get("top_stations_30d"):
+        lines.append(f"- Busiest stations: {_kv(r['top_stations_30d'], 3)}")
+    for a in (r.get("trend_alerts") or [])[:2]:
+        lines.append(f"- ⚠ Spike: {a['crime_type']} in {a['district']} — {a['recent_count']} vs {a['expected_count']} expected ({a['spike_ratio']}×)")
+    fc = r.get("forecast_next_week")
+    if fc and fc.get("next_week") is not None:
+        lines.append(f"- Forecast next week: ~{fc['next_week']} incidents ({fc.get('trend')}"
+                     + (f", {fc['change_pct']:+}%" if fc.get("change_pct") is not None else "") + ")")
+    if r.get("patrol"):
+        p = r["patrol"]
+        lines.append(f"- Patrol risk {p['risk_score']} ({p['risk_level']}) → {p['recommended_officers']} officers recommended")
+    cam = r.get("live_cameras")
+    if cam:
+        c = cam["alerts_24h"]
+        lines.append(f"- Live cameras: {cam['online']}/{cam['cameras']} online · {c.get('P1', 0)} P1 and {c.get('P2', 0)} P2 alerts in 24h, "
+                     f"{c.get('new', 0)} awaiting review")
+        for a in cam["latest_alerts"][:2]:
+            lines.append(f"  - {a['time']} {a['camera']}: {a['what']} ({a['priority']}; {', '.join(a['reasons'][:2])})")
+    if r.get("latest_cases"):
+        lines.append("- Latest FIRs: " + "; ".join(f"{c['case_id']} {c['crime_type']} ({c['station']}, {c['registered'][:10]})"
+                                                   for c in r["latest_cases"][:3]))
+    lines.append(f"- {_fmt_int(r['open_cases_total'])} cases still under investigation in {scope}.")
+    return "\n".join(lines)
+
+
+def _say_sightings(r):
+    if r.get("error"):
+        return r["error"]
+    if "sightings_24h" in r:
+        n = r["sightings_24h"]
+        if not n:
+            return f"{r.get('name')} ({r['suspect_id']}) has not been matched on any camera in the last 24 hours."
+        last = r["sightings"][-1]
+        lines = [f"**{r.get('name')} ({r['suspect_id']}) was last matched at {last['camera']}, {last['district']}** "
+                 f"at {last['time'][11:16]} UTC ({round(last['similarity'] * 100)}% face similarity, {last['band']} band) — "
+                 f"{n} sighting(s) in 24h."]
+        lines += [f"- {x['time'][11:16]} {x['camera']} ({x['district']}) · {round(x['similarity'] * 100)}% · {x['status']}"
+                  for x in r["sightings"][-6:-1][::-1]]
+        lines.append("Each sighting is a lead until an officer verifies it on the CCTV page.")
+        return "\n".join(lines)
+    if "registry_match" in r:
+        m = r["registry_match"]
+        head = (f"**{r['query']} matches stolen vehicle {m['vehicle_number']}** ({m.get('make_model')}, stolen "
+                f"{m.get('theft_date')} in {m.get('theft_district')}, {m.get('recovery_status')}; "
+                f"{m['kind']} match)." if m else f"{r['query']} is not in the stolen-vehicle registry.")
+        reads = r.get("recent_reads") or []
+        return head + ("\n" + "\n".join(f"- Read at {x['camera']} {x['time'][11:16]} UTC as {x['read']}" for x in reads[-5:]) if reads
+                       else "\n- No ANPR reads of it in the last 24 hours.")
+    c = r.get("counts_24h") or {}
+    lines = [f"**{r['scope']} camera network: {c.get('P1', 0)} P1 and {c.get('P2', 0)} P2 alerts in the last 24h**, "
+             f"{c.get('new', 0)} awaiting review, {c.get('verified', 0)} verified, {c.get('rejected', 0)} rejected."]
+    for a in r.get("alerts", [])[:5]:
+        who = f"{a['name']} ({a['person']})" if a.get("person") else f"plate {a.get('plate')}"
+        lines.append(f"- {a['time'][11:16]} {a['camera']}: {who} — {a['priority']}, {', '.join(a['reasons'][:2])} [{a['status']}]")
+    lines.append(r.get("policy", ""))
+    return "\n".join(lines)
+
+
 def compose(calls_and_results):
     parts = []
     for (name, args), res in calls_and_results:
+        if name == "situation":
+            parts.append(_say_situation(res))
+            continue
+        if name == "sightings":
+            parts.append(_say_sightings(res))
+            continue
         if name == "get_case":
             parts.append(_say_case(res))
         elif name == "get_person":
@@ -2101,6 +2374,7 @@ def _trace(name, args, res):
              "search_registry": "Searched registry", "network": "Traversed link graph",
              "insight": "Read analytics", "model_info": "Read model registry",
              "project_knowledge": "Read platform docs", "describe_platform": "Inspected live system",
+             "situation": "Read live situation", "sightings": "Checked CCTV / ANPR network",
              "navigate": "Moved screen"}.get(name, name)
     detail = ", ".join(f"{v}" for k, v in (args or {}).items() if v not in (None, "", False) and k not in ("limit", "sort_by", "order"))
     n = None

@@ -24,6 +24,8 @@ import networkx as nx
 import audit
 import agent_answers
 import copilot_engine
+import surveillance
+import conversations
 import copilot_knowledge
 _PROCESS_STARTED = time.time()
 import auth
@@ -2110,7 +2112,8 @@ _INTENT_NOUNS = re.compile(
     re.I)
 
 INTENT_LEXICON = {
-    "heatmap": ["heatmap", "heat map", "hotspot", "hot spot", "map of", "show map",
+    "heatmap": ["heatmap", "heat map", "hotspot", "hot spot", "map of", "show map", "on the map", "on a map",
+                "on map", "the map", "3d map", "district map",
                 "नक्शा", "मानचित्र", "हीटमैप", "नक़्शा",
                 "ನಕ್ಷೆ", "ಹೀಟ್‌ಮ್ಯಾಪ್", "ಹಾಟ್‌ಸ್ಪಾಟ್"],
     "network": ["link", "links", "network", "connection", "connections", "associate",
@@ -2157,16 +2160,12 @@ REGISTRY_INTENTS = [
 
 
 def _detect_district(text):
-    df = data_cache.get('firs')
-    if df is None:
-        return None
-    tl = text.lower()
-    best = None
-    for d in df['district'].unique():
-        if isinstance(d, str) and d.lower() in tl:
-            if best is None or len(d) > len(best):
-                best = d
-    return best
+    """District named in text, including the names people actually say — "Bangalore",
+    "Mysore", "Hubli", "Mangalore". Matching only the official names dropped the
+    district from "show the latest chain snatching cases in Bangalore" and opened the
+    statewide list instead."""
+    idx = copilot_engine._index(data_cache)
+    return copilot_engine.detect_district(text, idx) if idx is not None else None
 
 
 def _has_any(tl, words):
@@ -2189,6 +2188,10 @@ CRIME_SYNONYMS = {
                                     "phishing", "jamtara", "upi fraud", "digital fraud", "otp fraud",
                                     "digital arrest", "kyc fraud", "online scam"],
 }
+
+
+SURVEILLANCE_WORDS = ("cctv", "camera feed", "cameras", "camera wall", "anpr", "surveillance", "live feed",
+                      "face match", "facial recognition", "plate reader", "video wall")
 
 
 def _detect_crime_type(text):
@@ -2260,10 +2263,21 @@ def _resolve_crime_intent(text):
                 "reply": f"Opening {row['case_id']}, the {qual} {ct} case{(' in ' + d) if d else ''} "
                          f"(severity {int(row['severity_score'])}, {row['status']})."}
 
+    # "chain snatching on the map" is a map request, not a list request.
+    if _has_any(tl, INTENT_LEXICON["heatmap"]):
+        params = {"crime_type": ct, **({"district": d} if d else {})}
+        n = int(((df['crime_type'] == ct) & (df['district'] == d)).sum()) if d else int((df['crime_type'] == ct).sum())
+        return {"action": "show_heatmap", "params": params,
+                "reply": f"Mapping {n:,} {ct} cases{(' in ' + d) if d else ''}."}
+
     # Otherwise show the filtered list.
     params = {"crime_type": ct}
     if d:
         params["district"] = d
+    if _has_any(tl, ("severe", "serious", "worst", "dangerous")):
+        params["sort"] = "severity"
+    elif _has_any(tl, ("latest", "recent", "newest", "last", "new ")):
+        params["sort"] = "recent"
     n = int(((df['crime_type'] == ct) & (df['district'] == d)).sum()) if d else int((df['crime_type'] == ct).sum())
     return {"action": "recent_cases", "params": params,
             "reply": f"Showing {n} {ct} case{'s' if n != 1 else ''}{(' in ' + d) if d else ''}."}
@@ -2494,9 +2508,19 @@ def _deterministic_intent(text):
     if _has_any(tl, INTENT_LEXICON["dispatch"]):
         d = _detect_district(text)
         return {"action": "show_dispatch", "params": {"district": d} if d else {}}
+    if _has_any(tl, SURVEILLANCE_WORDS):
+        d = _detect_district(text)
+        return {"action": "show_surveillance", "params": {"district": d} if d else {},
+                "reply": f"Opening the CCTV & ANPR command{(' for ' + d) if d else ''}."}
     if _has_any(tl, INTENT_LEXICON["heatmap"]):
         d = _detect_district(text)
-        return {"action": "show_heatmap", "params": {"district": d} if d else {}}
+        ct = _detect_crime_type(text)
+        params = {k: v for k, v in (("district", d), ("crime_type", ct)) if v}
+        if _has_any(tl, ("3d", "three d", "buildings")):
+            params["mode"] = "3d"
+        if _has_any(tl, ("district map", "choropleth", "by district", "districts map")):
+            params["mode"] = "districts"
+        return {"action": "show_heatmap", "params": params}
 
     # `_heuristic_agent_router` carries the rest of the navigation surface — the link
     # graph, the four registry views, the recent-cases directory, AI suspect matching —
@@ -2995,6 +3019,10 @@ def run_agent(query, history=None, lang=None, page=None, context=None):
     result = _run_agent(query, history, lang, page, context)
     if result.get("reply") and not result.get("speech"):
         result["speech"] = copilot_engine.speech_summary(result["reply"])
+    original = (query or "").strip()
+    if result.get("transcript") and result["transcript"] != original:
+        result["interpreted_as"] = result["transcript"]
+    result["transcript"] = original
     return result
 
 
@@ -3020,6 +3048,12 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
                                 _s("Emerging trend alerts", "which crimes are spiking?"),
                                 _s("Who is the top offender?", "who is SUS-8286?")]}
 
+    # A follow-up that leans on the conversation ("what about Mysuru?", "show them on the
+    # map") becomes a self-contained request before anything routes it.
+    resolved = copilot_engine.rewrite_followup(text, history, copilot_engine._index(data_cache))
+    if resolved != text:
+        LOG.info("follow-up resolved: %r -> %r", text, resolved)
+        text = resolved
     tl = text.lower()
     # "What can I do here / help / guide me" → deterministic, page-aware walkthrough.
     if _has_any(tl, _HELP_CUES) and len(text) < 60 and not re.search(
@@ -3101,16 +3135,18 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
         # Not an outage. Nothing matched because the question is outside what this
         # system holds; saying "I could not reach my reasoning core" teaches a user to
         # distrust the tool exactly when it is behaving correctly.
+        # Never dead-end. Say plainly what is not in the records, then give the officer
+        # something useful: the live statewide picture.
+        brief = copilot_engine.compose([(("situation", {}), copilot_engine.tool_situation(data_cache))])
         return _agent_response("answer", {}, (
-            "That is outside what I can find in the KSP records. I can look up any FIR, offender, "
-            "officer, vehicle, cyber identifier or missing person; count and rank cases by district, "
-            "crime, station, year or time of day; trace links between people; and explain the "
-            "forecasts, hotspots and risk models. Try \"who are the accused in FIR-20345\", "
-            "\"how many murders in Mysuru in 2024\", or \"which station has the most chain snatching\"."),
-            _suggest_next("answer", {}, text), text)
+            "I don't have that in the KSP records or the camera network, and without a connected "
+            "language model I can't answer general questions. Here is what is happening across "
+            "Karnataka right now:\n\n" + brief),
+            _suggest_next("answer", {}, text), text,
+            extra={"trace": [copilot_engine._trace("situation", {}, {})], "mode": "deterministic"})
 
     nav = result.get("nav") or {}
-    if not nav and det and det["action"] != "answer":
+    if not nav and det and det["action"] in _ANSWERABLE_NAV:
         nav = {"action": det["action"], "params": det.get("params", {})}
     action = nav.get("action") or "answer"
     params = {k: v for k, v in (nav.get("params") or {}).items() if _valid_param(v)}
@@ -3242,6 +3278,227 @@ def _agent_response(action, params, reply, suggestions, text, extra=None):
            "suggestions": norm, "transcript": text, "grounding": report}
     out.update(extra or {})
     return out
+
+
+# ---------------------------------------------------------------------------
+# Map data
+# ---------------------------------------------------------------------------
+@app.route('/serverless/api/map/incidents', methods=['GET'])
+def route_map_incidents():
+    """Every FIR as a compact row for the map: position, severity and time, plus the
+    case id the heatmap already exposes. Columnar so 18,000 rows stay small."""
+    cached = data_cache.get('_map_incidents')
+    if cached is None:
+        f = data_cache['firs']
+        ts = pd.to_datetime(f['timestamp'], errors='coerce')
+        crimes = sorted(f['crime_type'].dropna().unique().tolist())
+        dists = sorted(f['district'].dropna().unique().tolist())
+        stations = sorted(f['police_station'].dropna().astype(str).unique().tolist())
+        statuses = sorted(f['status'].dropna().unique().tolist())
+        ci = {c: i for i, c in enumerate(crimes)}
+        di = {d: i for i, d in enumerate(dists)}
+        si = {d: i for i, d in enumerate(stations)}
+        ti = {d: i for i, d in enumerate(statuses)}
+        rows = [[round(float(la), 5), round(float(lo), 5), int(sv), ci.get(c, -1), di.get(d, -1),
+                 si.get(str(ps), -1), ti.get(st, -1),
+                 int(t.hour) if pd.notna(t) else -1, int(t.year) if pd.notna(t) else -1,
+                 int(t.month) if pd.notna(t) else -1, int(fa or 0), str(cid)]
+                for la, lo, sv, c, d, ps, st, t, fa, cid in zip(
+                    f['latitude'], f['longitude'], f['severity_score'], f['crime_type'], f['district'],
+                    f['police_station'], f['status'], ts, f['fatalities'].fillna(0), f['case_id'])
+                if pd.notna(la) and pd.notna(lo)]
+        cached = {"columns": ["lat", "lng", "severity", "crime", "district", "station", "status",
+                              "hour", "year", "month", "fatalities", "case_id"],
+                  "crime_types": crimes, "districts": dists, "stations": stations, "statuses": statuses,
+                  "rows": rows}
+        data_cache['_map_incidents'] = cached
+    return jsonify_safe(cached)
+
+
+@app.route('/serverless/api/map/districts', methods=['GET'])
+def route_map_districts():
+    """Per-district measures for the choropleth: volume, rate, openness, harm, trend,
+    forecast, risk index and camera coverage."""
+    import karnataka as KA
+    f = data_cache['firs']
+    ts = pd.to_datetime(f['timestamp'], errors='coerce')
+    end = ts.max()
+    recent = f[ts > end - pd.Timedelta(days=30)]
+    base = f[(ts <= end - pd.Timedelta(days=30)) & (ts > end - pd.Timedelta(days=395))]
+    fc = (data_cache.get('forecast') or {}).get('by_district', {})
+    oi = {r['district']: r for r in (data_cache.get('operational_index') or {}).get('districts', [])}
+    disp = {r['district']: r for r in data_cache.get('dispatch', [])}
+    cams = surveillance.cameras(data_cache)['summary']['by_district']
+    rows = []
+    for d, g in f.groupby('district'):
+        pop = KA.population(d)
+        n = len(g)
+        rec_n = int((recent['district'] == d).sum())
+        exp = (base['district'] == d).sum() / 365 * 30
+        top = g['crime_type'].value_counts()
+        rows.append({
+            "district": d, "cases": n,
+            # population() is in lakhs, and one lakh is 100,000: cases per lakh per year.
+            "per_100k": round(n / 7 / pop, 1) if pop else None,
+            "population_lakh": pop,
+            "open": int((g['status'] == 'Under Investigation').sum()),
+            "open_pct": round(float((g['status'] == 'Under Investigation').mean() * 100), 1),
+            "fatalities": int(g['fatalities'].fillna(0).sum()),
+            "avg_severity": round(float(g['severity_score'].mean()), 1),
+            "top_crime": top.index[0] if len(top) else None,
+            "last_30d": rec_n, "expected_30d": round(float(exp), 1),
+            "trend_ratio": round(float(rec_n / exp), 2) if exp else None,
+            "forecast_next_week": (fc.get(d) or {}).get('next_week'),
+            "forecast_trend": (fc.get(d) or {}).get('trend'),
+            "risk_index": (oi.get(d) or {}).get('index'), "risk_band": (oi.get(d) or {}).get('band'),
+            "recommended_officers": (disp.get(d) or {}).get('recommended_officers'),
+            "cameras": cams.get(d, 0),
+        })
+    rows.sort(key=lambda r: -r['cases'])
+    return jsonify_safe({"districts": rows, "extract_date": str(end)[:10],
+                         "note": "Per-100k is annual average over the 7-year corpus, on 2011 Census population."})
+
+
+# ---------------------------------------------------------------------------
+# Copilot workspace: saved conversations per officer
+# ---------------------------------------------------------------------------
+@app.route('/serverless/api/copilot/conversations', methods=['GET', 'POST', 'OPTIONS'])
+@audit.audited('copilot_conversations')
+@auth.require_role('investigator')
+def route_conversations():
+    if request.method == 'OPTIONS':
+        return '', 204
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        return jsonify_safe(conversations.create(_actor(), data.get('title')), status=201)
+    return jsonify_safe({"conversations": conversations.list_for(_actor(), request.args.get('q'))})
+
+
+@app.route('/serverless/api/copilot/conversations/<cid>', methods=['GET', 'POST', 'OPTIONS'])
+@audit.audited('copilot_conversation', subject_type='conversation', subject_arg='cid')
+@auth.require_role('investigator')
+def route_conversation(cid):
+    """GET reads; POST {title?, pinned?} edits; POST {delete: true} removes. GET and POST
+    only, because the gateway's CORS policy is not guaranteed to admit PATCH/DELETE."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        if data.get('delete'):
+            ok = conversations.delete(_actor(), cid)
+            return jsonify_safe({"deleted": ok}, status=200 if ok else 404)
+        c = conversations.update(_actor(), cid, data.get('title'), data.get('pinned'))
+    else:
+        c = conversations.get(_actor(), cid)
+    return jsonify_safe(c) if c else jsonify_safe({"error": "no such conversation"}, status=404)
+
+
+@app.route('/serverless/api/copilot/conversations/<cid>/messages', methods=['POST', 'OPTIONS'])
+@audit.audited('copilot_chat', subject_type='conversation', subject_arg='cid')
+@auth.require_role('investigator')
+def route_conversation_message(cid):
+    """Ask within a saved conversation: its own history is the context."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    data = request.get_json(silent=True) or {}
+    text = (data.get('content') or '').strip()
+    if not text:
+        return jsonify_safe({"error": "empty message"}, status=400)
+    c = conversations.get(_actor(), cid)
+    if not c:
+        return jsonify_safe({"error": "no such conversation"}, status=404)
+    result = run_agent(text, conversations.history(c), data.get('lang'), page='/copilot',
+                       context=data.get('context'))
+    c = conversations.append(_actor(), cid, text, result)
+    return jsonify_safe({"message": c["messages"][-1], "conversation": conversations._summary(c),
+                         "speech": result.get("speech")})
+
+
+# ---------------------------------------------------------------------------
+# CCTV & ANPR surveillance
+# ---------------------------------------------------------------------------
+def _actor():
+    return auth.current_identity().get("user") or "anonymous"
+
+
+@app.route('/serverless/api/surveillance/cameras', methods=['GET'])
+def route_surv_cameras():
+    """Camera positions and health. No person-level data, so open like the heatmap."""
+    a = request.args
+    return jsonify_safe(surveillance.cameras(data_cache, a.get('district'), a.get('type'), a.get('status')))
+
+
+@app.route('/serverless/api/surveillance/camera/<camera_id>', methods=['GET'])
+@audit.audited('read_camera_matches', subject_type='camera', subject_arg='camera_id')
+@auth.require_role('investigator')
+def route_surv_camera(camera_id):
+    out = surveillance.camera_detail(data_cache, _actor(), camera_id)
+    return jsonify_safe(out) if out else (jsonify_safe({"error": "no such camera"}, status=404))
+
+
+@app.route('/serverless/api/surveillance/feed', methods=['GET'])
+@audit.audited('read_surveillance_feed')
+@auth.require_role('investigator')
+def route_surv_feed():
+    a = request.args
+    return jsonify_safe(surveillance.feed(
+        data_cache, _actor(), since=a.get('since', type=float), camera_id=a.get('camera'),
+        kind=a.get('kind'), matches_only=a.get('matches_only') in ('1', 'true'),
+        limit=a.get('limit', default=80, type=int), district=a.get('district')))
+
+
+@app.route('/serverless/api/surveillance/alerts', methods=['GET'])
+@audit.audited('read_surveillance_alerts')
+@auth.require_role('investigator')
+def route_surv_alerts():
+    a = request.args
+    return jsonify_safe(surveillance.alerts(
+        data_cache, _actor(), since=a.get('since', type=float), status=a.get('status'),
+        priority=a.get('priority'), district=a.get('district'), limit=a.get('limit', default=100, type=int)))
+
+
+@app.route('/serverless/api/surveillance/alerts/<event_id>', methods=['POST', 'OPTIONS'])
+@audit.audited('decide_surveillance_alert', subject_type='sighting', subject_arg='event_id')
+@auth.require_role('investigator')
+def route_surv_decide(event_id):
+    if request.method == 'OPTIONS':
+        return '', 204
+    data = request.get_json(silent=True) or {}
+    out, status = surveillance.decide(data_cache, _actor(), event_id, data.get('action'), data.get('note'))
+    return jsonify_safe(out, status=status)
+
+
+@app.route('/serverless/api/surveillance/track/<suspect_id>', methods=['GET'])
+@audit.audited('track_person', subject_type='offender', subject_arg='suspect_id')
+@auth.require_role('investigator')
+def route_surv_track(suspect_id):
+    out = surveillance.track(data_cache, _actor(), suspect_id.upper(),
+                             hours=min(24, request.args.get('hours', default=24, type=int)))
+    return jsonify_safe(out) if out else jsonify_safe({"error": "no such person"}, status=404)
+
+
+@app.route('/serverless/api/surveillance/plate', methods=['GET'])
+@audit.audited('anpr_lookup')
+@auth.require_role('investigator')
+def route_surv_plate():
+    return jsonify_safe(surveillance.lookup_plate(data_cache, request.args.get('q', '')))
+
+
+@app.route('/serverless/api/surveillance/watchlist', methods=['GET', 'POST', 'OPTIONS'])
+@audit.audited('surveillance_watchlist')
+@auth.require_role('investigator')
+def route_surv_watchlist():
+    if request.method == 'OPTIONS':
+        return '', 204
+    data = (request.get_json(silent=True) or {}) if request.method == 'POST' else {}
+    out, status = surveillance.watchlist(data_cache, _actor(), add=data.get('add'), remove=data.get('remove'))
+    return jsonify_safe(out, status=status)
+
+
+@app.route('/serverless/api/surveillance/model', methods=['GET'])
+def route_surv_model():
+    """The matcher's card and measured error rates. Aggregate, so open."""
+    return jsonify_safe(surveillance.model_card(data_cache))
 
 
 @app.route('/serverless/api/dispatch', methods=['GET'])

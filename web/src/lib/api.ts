@@ -35,6 +35,7 @@ export type AgentAction =
   | "show_suspects"
   | "open_copilot"
   | "guide"
+  | "show_surveillance"
   | "answer";
 
 export interface AgentSuggestion {
@@ -55,6 +56,8 @@ export interface AgentResult {
     q?: string;
     query?: string;
     target?: string;
+    mode?: string;
+    sort?: string;
     repeat_only?: boolean | string;
     rowdy_sheeter?: boolean | string;
     active_warrant?: boolean | string;

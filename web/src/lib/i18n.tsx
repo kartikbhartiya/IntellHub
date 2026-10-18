@@ -66,6 +66,9 @@ const KN: Record<string, string> = {
   "nav.pendency": "ಬಾಕಿ",
   "nav.dispatch": "ನಿಯೋಜನೆ",
   "nav.access": "ಪ್ರವೇಶ",
+  "nav.cctv": "ಸಿಸಿಟಿವಿ",
+  "nav.copilot": "ಸಹಾಯಕ",
+  "nav.more": "ಇನ್ನಷ್ಟು",
 
   // common chrome
   "common.district": "ಜಿಲ್ಲೆ",
@@ -109,6 +112,9 @@ const EN_DEFAULTS: Record<string, string> = {
   "nav.pendency": "Pendency",
   "nav.dispatch": "Dispatch",
   "nav.access": "Access",
+  "nav.cctv": "CCTV",
+  "nav.copilot": "Copilot",
+  "nav.more": "More",
   "common.skipToContent": "Skip to main content",
   "a11y.primaryNav": "Primary",
 };

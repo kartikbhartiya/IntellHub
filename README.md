@@ -423,6 +423,43 @@ threshold, because real geography defeats thresholds: Koppal and Hosapete
 * **Siri-style voice UI.** A live waveform that follows your microphone level and each word Kavya
   speaks, an animated orb, a screen-edge glow in voice mode, a conversation transcript with clickable
   case / offender ids, and a strip showing which records each answer was read from. English and Kannada.
+* **Answers open questions and keeps the thread.** "What's going on in Bangalore right now?" gets a live
+  situation brief (last 7/30 days, crime mix, spikes, forecast, patrol risk, live camera alerts). City
+  names people actually say — Bangalore, Mysore, Hubli, Mangalore — resolve to districts, so "show the
+  latest chain snatching cases in Bangalore" opens the Bengaluru list. Follow-ups are rewritten against
+  the conversation: "what about Belagavi?", "and 2023?", "show them on the map".
+* **Copilot tab (`/copilot`).** A full-page workspace: conversations saved to the officer's account
+  (search, pin, rename, delete), each thread is its own context, answers carry the records they used and a
+  one-click "open this" action, voice dictation, English / ಕನ್ನಡ.
+
+### 8. 🗺️ Crime Map — MapLibre, 2D / 3D / districts / satellite / night
+* One vector engine (MapLibre GL over OpenFreeMap / CARTO tiles, Esri imagery for satellite — no API key).
+* **3D city:** pitched view with extruded buildings and hexagonal crime columns whose height and colour
+  encode density; the bin size adapts to zoom. **2D:** severity heatmap, clusters, individual FIRs, DBSCAN
+  zones. **Districts:** a choropleth of all 31 districts — real boundaries, extruded by the chosen metric
+  (cases, per-100k, open, deaths, last 30 days, risk index, cameras).
+* Pulsing KDE predicted hotspots, emerging-spike markers, live camera alerts, a numbered movement trail
+  for a tracked person (`/map?track=SUS-…`), a 24-hour time-of-day playback, and a cinematic tour.
+* "This view" analyses whatever is on screen: concentration, peak hour, busiest window, open share.
+* Boundaries are Census 2011 district polygons; **Vijayanagara** (2021) is built from its five constituent
+  2011 taluks — see the `source` field in `web/public/geo/karnataka-districts.geojson` for the one
+  limitation (Kampli).
+
+### 9. 📹 CCTV & ANPR Surveillance Command (`/surveillance`)
+* A simulated network of 590 cameras across all 31 districts, Bengaluru-heavy, placed at named public
+  landmarks (transit hubs, junctions, toll plazas, markets) — **not** the KSP Safe City inventory.
+* **Face matching:** every sighting is matched 1:N against the 9,000-person offender gallery (cosine
+  similarity, top-3, threshold + margin). The threshold was chosen for < 0.5 % false matches on
+  look-alikes; measured rates are served at `/surveillance/model` and shown on the page, including the
+  drop at night and on low-resolution cameras.
+* **ANPR:** reads are matched to the stolen-vehicle registry exactly and with an OCR-aware edit distance
+  (0/O, 1/I, 8/B, 5/S … cost less), so a mangled read still finds the car.
+* **Alerts, not actions:** P1 (warrant, exact stolen plate, watchlist) and P2 matches queue for an officer,
+  who must write what they checked to verify or reject; every decision is logged. Personal watchlists,
+  sound / desktop notifications and a nav bell with toasts. Faces with no registry match are counted and
+  discarded, never identified.
+* Feeds show the camera's real location as aerial reference imagery with sensor treatment and the
+  matcher's boxes; an officer can point any camera at a real stream URL.
 
 ---
 

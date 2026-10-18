@@ -56,16 +56,19 @@ function CasesContent() {
 
   // Initialize filters from URL query parameters
   useEffect(() => {
-    const patch: Partial<typeof filters> = {};
     const ct = searchParams.get("crime_type");
     const d = searchParams.get("district");
     const st = searchParams.get("status");
     const q = searchParams.get("q");
-    if (ct) patch.crime_type = ct;
-    if (d) patch.district = d;
+    const sort = searchParams.get("sort");
+    // A navigation (the assistant's or a link's) describes the whole filter set. Merging
+    // it into whatever was set before kept a stale district from an earlier visit, so
+    // "chain snatching in Bengaluru" could open filtered to somewhere else.
+    if (!(ct || d || st || q || sort)) return;
+    const patch: Partial<typeof filters> = { crime_type: ct || "", district: d || "", q: q || "" };
     if (st) patch.status = st.charAt(0).toUpperCase() + st.slice(1).toLowerCase();
-    if (q) patch.q = q;
-    if (Object.keys(patch).length) setFilters((f) => ({ ...f, ...patch }));
+    if (sort) (patch as any).sort = sort;
+    setFilters((f) => ({ ...f, ...patch }));
   }, [searchParams]);
 
   useEffect(() => {

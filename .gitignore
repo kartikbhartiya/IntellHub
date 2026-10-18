@@ -71,3 +71,7 @@ appsail/outcomes.jsonl.1
 
 # Contest register. Runtime record, same treatment as the other sinks.
 appsail/contests.jsonl
+
+# Surveillance alert decisions and saved copilot conversations. Runtime records.
+appsail/surveillance_decisions.jsonl
+appsail/copilot_conversations.json

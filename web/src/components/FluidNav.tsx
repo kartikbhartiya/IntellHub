@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import AlertCenter from "./AlertCenter";
 import { useI18n, LANGUAGES } from "@/lib/i18n";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard,
   Folders,
@@ -17,6 +19,9 @@ import {
   Timer,
   GitBranch,
   Lock,
+  Cctv,
+  Sparkles,
+  ChevronDown,
 } from "lucide-react";
 
 // `key` drives translation; `label` is the English source and the fallback.
@@ -24,15 +29,74 @@ const NAV: { href: string; label: string; key: string; icon: any }[] = [
   { href: "/", label: "Overview", key: "nav.overview", icon: LayoutDashboard },
   { href: "/cases", label: "Cases", key: "nav.cases", icon: Folders },
   { href: "/map", label: "Map", key: "nav.map", icon: MapIcon },
+  { href: "/surveillance", label: "CCTV", key: "nav.cctv", icon: Cctv },
   { href: "/network", label: "Network", key: "nav.network", icon: Network },
   { href: "/analytics", label: "Analytics", key: "nav.analytics", icon: Brain },
   { href: "/intel", label: "Registry", key: "nav.registry", icon: Boxes },
+  { href: "/copilot", label: "Copilot", key: "nav.copilot", icon: Sparkles },
+];
+
+// Less-frequent destinations, kept one click away so the pill fits a laptop screen.
+const MORE: { href: string; label: string; key: string; icon: any }[] = [
   { href: "/officers", label: "Officers", key: "nav.officers", icon: Users },
   { href: "/lifecycle", label: "Lifecycle", key: "nav.lifecycle", icon: GitBranch },
   { href: "/pendency", label: "Pendency", key: "nav.pendency", icon: Timer },
   { href: "/dispatch", label: "Dispatch", key: "nav.dispatch", icon: Siren },
   { href: "/access", label: "Access", key: "nav.access", icon: Lock },
 ];
+
+function MoreMenu({ isActive, t }: { isActive: (h: string) => boolean; t: (k: string, d: string) => string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLLIElement>(null);
+  const current = MORE.find((m) => isActive(m.href));
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  const Icon = current?.icon || ChevronDown;
+  return (
+    <li ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`group relative flex min-h-[44px] items-center justify-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-medium transition-colors md:min-h-0 ${current ? "text-black" : "text-muted hover:text-ink"}`}
+      >
+        {current && (
+          <motion.span layoutId="nav-pill" transition={{ type: "spring", stiffness: 480, damping: 30 }}
+                       className="absolute inset-0 -z-10 rounded-full bg-gradient-to-b from-brand-soft to-brand shadow-[0_6px_20px_-5px_rgba(176,125,22,0.7)]" />
+        )}
+        {current && <Icon className="h-[15px] w-[15px]" aria-hidden="true" />}
+        <span className="hidden md:inline">{current ? t(current.key, current.label) : t("nav.more", "More")}</span>
+        <span className="sr-only md:hidden">{t("nav.more", "More")}</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.16 }}
+            className="fixed left-4 top-[84px] z-50 min-w-[190px] rounded-2xl border border-black/10 bg-white p-1.5 shadow-[0_24px_60px_-20px_rgba(17,20,32,0.3)] md:absolute md:left-auto md:right-0 md:top-12"
+          >
+            {MORE.map(({ href, label, key, icon: I }) => (
+              <li key={href}>
+                <Link prefetch={false} href={href} onClick={() => setOpen(false)}
+                      className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium ${isActive(href) ? "bg-brand/10 text-brand-deep" : "text-ink hover:bg-black/[0.04]"}`}>
+                  <I className="h-4 w-4" /> {t(key, label)}
+                </Link>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </li>
+  );
+}
 
 const spring = { type: "spring" as const, stiffness: 420, damping: 26 };
 
@@ -133,7 +197,10 @@ export default function FluidNav() {
               </motion.li>
             );
           })}
+          <MoreMenu isActive={isActive} t={t} />
         </ul>
+
+        <AlertCenter />
 
         {/* Language switch. Karnataka Police work in Kannada; an English-only tool
             excludes the people expected to live in it. */}

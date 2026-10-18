@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
       }
     : {}),
   images: { unoptimized: true },
+  // Static assets under public/ live behind the same basePath in production.
+  env: { NEXT_PUBLIC_BASE_PATH: isProd ? "/app" : "" },
   trailingSlash: true,
 };
 
