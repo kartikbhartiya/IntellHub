@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { GitBranch, Gauge, Info, Scale, TrendingUp } from "lucide-react";
 import { getJSON } from "@/lib/api";
+import CaseFlowSankey from "@/components/CaseFlowSankey";
 
 // Module-scope motion props: rebuilding them per render restarts every entrance
 // animation when data lands, which renders the page blank.
@@ -181,8 +182,18 @@ export default function LifecyclePage() {
         </div>
       </motion.div>
 
+      {/* ------------------------------------------------------- case flow
+          The funnel says how many cases reach each stage; the flow says which
+          crime types are sitting where. Its outcomes are gated on FIR status, so
+          its conviction counts are lower than the funnel's — the card says why. */}
+      <motion.div {...fade(2)} className="bezel min-w-0">
+        <div className="bezel-core p-6">
+          <CaseFlowSankey />
+        </div>
+      </motion.div>
+
       {/* -------------------------------------------- operational risk index */}
-      <motion.div {...fade(2)} className="bezel">
+      <motion.div {...fade(3)} className="bezel">
         <div className="bezel-core p-6">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">
             <Gauge className="h-4 w-4" /> District Operational Risk Index
@@ -314,7 +325,7 @@ export default function LifecyclePage() {
       </motion.div>
 
       {/* --------------------------------------------- district conversion */}
-      <motion.div {...fade(3)} className="bezel">
+      <motion.div {...fade(4)} className="bezel">
         <div className="bezel-core p-6">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">
             <TrendingUp className="h-4 w-4" /> Conversion by district — weakest first

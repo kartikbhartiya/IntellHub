@@ -114,10 +114,42 @@ def module_docstrings():
     return out
 
 
+# Modules that define routes on a Flask Blueprint (`bp.route(f"{API}/...")`).
+BLUEPRINT_MODULES = ("fir_registry.py", "insights.py", "network_intel.py", "news.py", "streams.py",
+                     "temporal.py", "trend_forecast.py")
+
+
+def _route_path(node):
+    """A route path from a string constant or an f-string over the module's API prefix."""
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        out = []
+        for v in node.values:
+            if isinstance(v, ast.Constant):
+                out.append(v.value)
+            elif isinstance(v, ast.FormattedValue) and ast.unparse(v.value) == "API":
+                out.append("/serverless/api")
+            else:
+                return None
+        return "".join(out)
+    return None
+
+
 def api_routes():
-    path = os.path.join(HERE, "main.py")
-    with open(path, encoding="utf-8") as fh:
-        tree = ast.parse(fh.read())
+    trees = []
+    for name in ("main.py",) + BLUEPRINT_MODULES:
+        path = os.path.join(HERE, name)
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                trees.append((name, ast.parse(fh.read())))
+    routes = []
+    for source, tree in trees:
+        routes.extend(_routes_in(source, tree))
+    return _route_chunks(routes)
+
+
+def _routes_in(source, tree):
     routes = []
     for node in tree.body:
         if not isinstance(node, ast.FunctionDef):
@@ -128,26 +160,38 @@ def api_routes():
                 continue
             fn = ast.unparse(d.func)
             args = [a.value for a in d.args if isinstance(a, ast.Constant)]
-            if fn.endswith("app.route") and args:
-                paths.append(args[0])
+            if (fn.endswith("app.route") or fn.endswith("bp.route")) and d.args:
+                p = _route_path(d.args[0])
+                if p:
+                    paths.append(p)
                 for kw in d.keywords:
                     if kw.arg == "methods":
                         methods = [e.value for e in kw.value.elts if isinstance(e, ast.Constant)]
             elif fn.endswith("require_role") and args:
                 role = args[0]
+            elif fn.endswith("require_permission") and args:
+                # Permission gates do not map onto one rung of the ladder, so the
+                # index names the permission and the roles that hold it.
+                import auth as _auth
+                holders = [r for r in _auth.ROLES if args[0] in _auth.permissions_for(r)]
+                role = f"{args[0]} ({', '.join(holders)})"
             elif fn.endswith("audited") and args:
                 action = args[0]
         for p in paths:
             routes.append({"path": p, "methods": [m for m in methods if m != "OPTIONS"], "role": role,
-                           "audited_as": action, "handler": node.name,
+                           "audited_as": action, "handler": node.name, "source": source,
                            "doc": (ast.get_docstring(node) or "").split("\n\n")[0][:500]})
+    return routes
+
+
+def _route_chunks(routes):
     routes.sort(key=lambda r: r["path"])
     chunks = []
     for r in routes:
         if not r["path"].startswith("/serverless/api"):
             continue
         words = " ".join(r["path"].strip("/").split("/")[2:]).replace("<", "").replace(">", "").replace("-", " ")
-        chunks.append({"source": "appsail/main.py", "kind": "route", "title": f"API route {r['path']}",
+        chunks.append({"source": f"appsail/{r['source']}", "kind": "route", "title": f"API route {r['path']}",
                        "text": f"{r['path']} ({', '.join(r['methods'])}) — access: {r['role']}"
                                + (f"; audited as {r['audited_as']}" if r["audited_as"] else "")
                                + f"; handler {r['handler']} ({words})" + (f". {r['doc']}" if r["doc"] else "")})

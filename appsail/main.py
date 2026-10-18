@@ -25,6 +25,13 @@ import audit
 import agent_answers
 import copilot_engine
 import surveillance
+import fir_registry
+import insights
+import network_intel
+import news
+import streams
+import temporal
+import trend_forecast
 import conversations
 import copilot_knowledge
 _PROCESS_STARTED = time.time()
@@ -127,6 +134,43 @@ copilot_knowledge.configure(app)
 data_cache = {}
 models = {}
 
+
+def _on_fir_registered(bundle):
+    """Publish a just-registered FIR to every derived view without a full reload.
+
+    fir_registry has already appended the raw table rows; this builds the FIR-frame
+    row with the loader's own function, extends links, reports and the graph, and
+    drops the memoised views that are not keyed on the frame's identity.
+    """
+    cm = data_cache['CaseMaster']
+    new = cm[cm['CaseMasterID'] == bundle['case_master_id']]
+    records, _ = _firs_records(new)
+    data_cache['firs'] = pd.concat([data_cache['firs'], pd.DataFrame(records)], ignore_index=True)
+    if bundle.get('links'):
+        data_cache['links'] = pd.concat([data_cache['links'], pd.DataFrame(bundle['links'])], ignore_index=True)
+    if bundle.get('reports'):
+        data_cache['reports'] = pd.concat([data_cache['reports'], pd.DataFrame(bundle['reports'])], ignore_index=True)
+    for r in records:
+        knowledge_graph.add_node(r['case_id'], type='Case', crime_type=r['crime_type'], district=r['district'])
+    for l in bundle.get('links', []):
+        if knowledge_graph.has_node(l['suspect_id']):
+            knowledge_graph.add_edge(l['case_id'], l['suspect_id'], relationship=l['relationship'])
+    for key in ('_map_incidents', '_grounding_sets', 'suspect_case_meta'):
+        data_cache.pop(key, None)
+    LOG.info("FIR %s registered and published", bundle['crime_no'])
+
+
+fir_registry.configure(lambda: data_cache, _on_fir_registered, auth.current_identity)
+insights.configure(lambda: data_cache)
+news.configure(lambda: data_cache)
+network_intel.configure(lambda: knowledge_graph, lambda: data_cache)
+temporal.configure(lambda: data_cache)
+trend_forecast.configure(lambda: data_cache)
+streams.configure(lambda: {c["camera_id"]: c.get("district") for c in surveillance.ensure(data_cache)["cameras"]}
+                  if data_cache.get('_load_complete') else set())
+for _bp in (fir_registry.bp, insights.bp, network_intel.bp, news.bp, streams.bp, temporal.bp, trend_forecast.bp):
+    app.register_blueprint(_bp)
+
 import pandas as pd
 
 # Removed get_data_dir to prevent os.walk issues
@@ -161,6 +205,123 @@ RISK_BANDS = {'Critical': 66, 'High': 40, 'Moderate': 20}
 # lock, so `/sync`, the warm-up thread and any direct call could run concurrently.
 # Re-entrant so the double-checked path in `check_ready` does not deadlock.
 _load_lock = threading.RLock()
+
+
+def _firs_records(df_cm):
+    """CaseMaster rows -> FIR-frame records, with every master lookup resolved.
+
+    One function for the boot-time load and for a newly registered FIR, so a case
+    registered through the platform is shaped exactly like one loaded from disk.
+    Returns (records, unparseable_timestamp_count).
+    """
+    unit_map = dict(zip(data_cache['Unit']['UnitID'], data_cache['Unit']['UnitName']))
+    dist_map = dict(zip(data_cache['District']['DistrictID'], data_cache['District']['DistrictName']))
+    unit_to_dist_id = dict(zip(data_cache['Unit']['UnitID'], data_cache['Unit']['DistrictID']))
+    subhead_map = dict(zip(data_cache['CrimeSubHead']['CrimeSubHeadID'], data_cache['CrimeSubHead']['CrimeHeadName']))
+    status_map = dict(zip(data_cache['CaseStatusMaster']['CaseStatusID'], data_cache['CaseStatusMaster']['CaseStatusName']))
+
+    # Pre-aggregate victims
+    df_vict = data_cache['Victim']
+    vict_first = df_vict.groupby("CaseMasterID").first()
+    vict_name_map = vict_first["VictimName"].to_dict()
+    vict_age_map = vict_first["AgeYear"].to_dict()
+    vict_gender_map = vict_first["GenderID"].map({1: "M", 2: "F", 3: "T"}).to_dict()
+    vict_police_map = vict_first["VictimPolice"].astype(str).to_dict()
+
+    # Pre-aggregate ActSectionAssociation
+    df_asa = data_cache['ActSectionAssociation']
+    df_asa['ActSection'] = df_asa['ActID'].astype(str) + " " + df_asa['SectionID'].astype(str)
+    asa_map = df_asa.groupby("CaseMasterID")['ActSection'].apply(lambda x: " · ".join(x)).to_dict()
+
+    # Accused counts
+    df_acc = data_cache['Accused']
+    acc_counts = df_acc.groupby("CaseMasterID").size().to_dict()
+
+    # Map EmployeeID to KGID
+    df_emp = data_cache['Employee']
+    emp_kgid_map = dict(zip(df_emp['EmployeeID'], df_emp['KGID']))
+
+    import re
+    metadata_pat = re.compile(r"\[METADATA: SEV=(\d+);WPN=([^;]+);VEH=([^;]+);TGT=([^;]+);FAT=(\d+);INJ=(\d+);WIT=(\d+)\]")
+
+    firs_records = []
+    _bad_timestamps = 0
+    for row in df_cm.itertuples():
+        cm_id = row.CaseMasterID
+        u_id = row.PoliceStationID
+        d_id = unit_to_dist_id.get(u_id, 1)
+        dist_name = dist_map.get(d_id, "Unknown")
+        ps_name = unit_map.get(u_id, "Unknown PS")
+        crime_type = subhead_map.get(row.CrimeMinorHeadID, "Unknown")
+        status_name = status_map.get(row.CaseStatusID, "Under Investigation")
+        emp_id = row.PolicePersonID
+        off_kgid = emp_kgid_map.get(emp_id, f"OFF-{emp_id}")
+
+        # Parse BriefFacts metadata
+        facts = str(row.BriefFacts)
+        m = metadata_pat.search(facts)
+        if m:
+            sev = int(m.group(1))
+            weapon = m.group(2)
+            vehicle = m.group(3)
+            target = m.group(4)
+            fatal = int(m.group(5))
+            injured = int(m.group(6))
+            wit = int(m.group(7))
+        else:
+            sev = 50
+            weapon = "None"
+            vehicle = "None"
+            target = "Unknown"
+            fatal = 0
+            injured = 0
+            wit = 0
+
+        # Time of day calculation
+        ts_str = str(row.IncidentFromDate)
+        try:
+            hour = int(ts_str.split()[1].split(":")[0])
+            if hour >= 23 or hour < 5:
+                tod = "Late Night (1AM-4AM)"
+            elif hour >= 5 and hour < 12:
+                tod = "Morning (7AM-10AM)"
+            elif hour >= 12 and hour < 17:
+                tod = "Afternoon (1PM-4PM)"
+            else:
+                tod = "Evening (5PM-8PM)"
+        except Exception:
+            tod = "Morning (7AM-10AM)"
+            _bad_timestamps += 1
+
+        firs_records.append({
+            "case_id": str(row.CrimeNo),
+            "district": dist_name,
+            "latitude": row.latitude,
+            "longitude": row.longitude,
+            "crime_type": crime_type,
+            "timestamp": row.IncidentFromDate,
+            "severity_score": sev,
+            "status": status_name,
+            "time_of_day": tod,
+            "target_type": target,
+            "weapon_used": weapon,
+            "vehicle_used": vehicle,
+            "police_station": ps_name,
+            "ipc_bns_sections": asa_map.get(cm_id, "IPC 34"),
+            "victim_name": vict_name_map.get(cm_id, ""),
+            "victim_age": vict_age_map.get(cm_id, np.nan),
+            "victim_gender": vict_gender_map.get(cm_id, "M"),
+            "victim_police": vict_police_map.get(cm_id, "0"),
+            "officer_id": off_kgid,
+            "witnesses": wit,
+            "fatalities": fatal,
+            "injured": injured,
+            "accused_count": acc_counts.get(cm_id, 0),
+            "CrimeNo": str(row.CrimeNo),
+            "CaseNo": str(row.CaseNo),
+            "CaseMasterID": cm_id
+        })
+    return firs_records, _bad_timestamps
 
 
 def load_and_build_intelligence(force=False):
@@ -206,6 +367,14 @@ def _load_and_build_locked(force=False):
         for t in tables:
             data_cache[t] = raw[t]
 
+        # FIRs registered through the platform live outside data/ (see fir_registry)
+        # and are replayed onto the tables here, before anything is derived from them.
+        _registered = fir_registry.stored_bundles()
+        for bundle in _registered:
+            fir_registry.append_rows(data_cache, bundle)
+        if _registered:
+            LOG.info("Replayed %d registered FIR(s) onto the corpus", len(_registered))
+
         # Registries
         df_crim_reg = raw['CriminalsRegistry']
         df_off_reg = raw['OfficersRegistry']
@@ -218,11 +387,17 @@ def _load_and_build_locked(force=False):
 
         # 1. Reconstruct df_links
         df_links = ml_bundle['links'].copy()
+        _reg_links = [l for b in _registered for l in b.get('links', [])]
+        if _reg_links:
+            df_links = pd.concat([df_links, pd.DataFrame(_reg_links)], ignore_index=True)
         df_links["case_id"] = df_links["case_id"].astype(str)
         df_links["suspect_id"] = df_links["suspect_id"].astype(str)
 
         # 2. Reconstruct df_reports
         df_reports = ml_bundle['reports'].copy()
+        _reg_reports = [r for b in _registered for r in b.get('reports', [])]
+        if _reg_reports:
+            df_reports = pd.concat([df_reports, pd.DataFrame(_reg_reports)], ignore_index=True)
         df_reports["case_id"] = df_reports["case_id"].astype(str)
 
         # 3. Reconstruct df_suspects
@@ -234,110 +409,8 @@ def _load_and_build_locked(force=False):
         unit_map = dict(zip(data_cache['Unit']['UnitID'], data_cache['Unit']['UnitName']))
         dist_map = dict(zip(data_cache['District']['DistrictID'], data_cache['District']['DistrictName']))
         unit_to_dist_id = dict(zip(data_cache['Unit']['UnitID'], data_cache['Unit']['DistrictID']))
-        subhead_map = dict(zip(data_cache['CrimeSubHead']['CrimeSubHeadID'], data_cache['CrimeSubHead']['CrimeHeadName']))
-        status_map = dict(zip(data_cache['CaseStatusMaster']['CaseStatusID'], data_cache['CaseStatusMaster']['CaseStatusName']))
-        
-        # Pre-aggregate victims
-        df_vict = data_cache['Victim']
-        vict_first = df_vict.groupby("CaseMasterID").first()
-        vict_name_map = vict_first["VictimName"].to_dict()
-        vict_age_map = vict_first["AgeYear"].to_dict()
-        vict_gender_map = vict_first["GenderID"].map({1: "M", 2: "F", 3: "T"}).to_dict()
-        vict_police_map = vict_first["VictimPolice"].astype(str).to_dict()
-        
-        # Pre-aggregate ActSectionAssociation
-        df_asa = data_cache['ActSectionAssociation']
-        df_asa['ActSection'] = df_asa['ActID'].astype(str) + " " + df_asa['SectionID'].astype(str)
-        asa_map = df_asa.groupby("CaseMasterID")['ActSection'].apply(lambda x: " · ".join(x)).to_dict()
-        
-        # Accused counts
-        df_acc = data_cache['Accused']
-        acc_counts = df_acc.groupby("CaseMasterID").size().to_dict()
-        
-        # Map EmployeeID to KGID
         df_emp = data_cache['Employee']
-        emp_kgid_map = dict(zip(df_emp['EmployeeID'], df_emp['KGID']))
-        
-        import re
-        metadata_pat = re.compile(r"\[METADATA: SEV=(\d+);WPN=([^;]+);VEH=([^;]+);TGT=([^;]+);FAT=(\d+);INJ=(\d+);WIT=(\d+)\]")
-
-        firs_records = []
-        _bad_timestamps = 0
-        for row in df_cm.itertuples():
-            cm_id = row.CaseMasterID
-            u_id = row.PoliceStationID
-            d_id = unit_to_dist_id.get(u_id, 1)
-            dist_name = dist_map.get(d_id, "Unknown")
-            ps_name = unit_map.get(u_id, "Unknown PS")
-            crime_type = subhead_map.get(row.CrimeMinorHeadID, "Unknown")
-            status_name = status_map.get(row.CaseStatusID, "Under Investigation")
-            emp_id = row.PolicePersonID
-            off_kgid = emp_kgid_map.get(emp_id, f"OFF-{emp_id}")
-            
-            # Parse BriefFacts metadata
-            facts = str(row.BriefFacts)
-            m = metadata_pat.search(facts)
-            if m:
-                sev = int(m.group(1))
-                weapon = m.group(2)
-                vehicle = m.group(3)
-                target = m.group(4)
-                fatal = int(m.group(5))
-                injured = int(m.group(6))
-                wit = int(m.group(7))
-            else:
-                sev = 50
-                weapon = "None"
-                vehicle = "None"
-                target = "Unknown"
-                fatal = 0
-                injured = 0
-                wit = 0
-            
-            # Time of day calculation
-            ts_str = str(row.IncidentFromDate)
-            try:
-                hour = int(ts_str.split()[1].split(":")[0])
-                if hour >= 23 or hour < 5:
-                    tod = "Late Night (1AM-4AM)"
-                elif hour >= 5 and hour < 12:
-                    tod = "Morning (7AM-10AM)"
-                elif hour >= 12 and hour < 17:
-                    tod = "Afternoon (1PM-4PM)"
-                else:
-                    tod = "Evening (5PM-8PM)"
-            except Exception:
-                tod = "Morning (7AM-10AM)"
-                _bad_timestamps += 1
-
-            firs_records.append({
-                "case_id": str(row.CrimeNo),
-                "district": dist_name,
-                "latitude": row.latitude,
-                "longitude": row.longitude,
-                "crime_type": crime_type,
-                "timestamp": row.IncidentFromDate,
-                "severity_score": sev,
-                "status": status_name,
-                "time_of_day": tod,
-                "target_type": target,
-                "weapon_used": weapon,
-                "vehicle_used": vehicle,
-                "police_station": ps_name,
-                "ipc_bns_sections": asa_map.get(cm_id, "IPC 34"),
-                "victim_name": vict_name_map.get(cm_id, ""),
-                "victim_age": vict_age_map.get(cm_id, np.nan),
-                "victim_gender": vict_gender_map.get(cm_id, "M"),
-                "victim_police": vict_police_map.get(cm_id, "0"),
-                "officer_id": off_kgid,
-                "witnesses": wit,
-                "fatalities": fatal,
-                "injured": injured,
-                "accused_count": acc_counts.get(cm_id, 0),
-                "CrimeNo": str(row.CrimeNo),
-                "CaseNo": str(row.CaseNo),
-                "CaseMasterID": cm_id
-            })
+        firs_records, _bad_timestamps = _firs_records(df_cm)
         df_firs = pd.DataFrame(firs_records)
         if _bad_timestamps:
             LOG.warning("%d of %d incidents had an unparseable timestamp and were "
@@ -1118,11 +1191,21 @@ def _redacted_link(link):
     }
 
 
-def _redacted_watchlist_row(row):
-    """Full row for a supervisor, pseudonymised shape for everyone else."""
+def _redacted_watchlist_row(row, ident=None):
+    """Full row for a caller holding `watchlist_names` whose jurisdiction covers the
+    person; the pseudonymised shape for everyone else.
+
+    A district SP holds the permission but only for their district: a person with no
+    case there arrives redacted, so the SP sees the whole watchlist's shape and the
+    names of the people they are actually responsible for.
+    """
     if not row:
         return {}
-    return row if auth.has_role('supervisor') else auth.redact_watchlist_row(row)
+    ident = ident or auth.current_identity()
+    if (auth.has_permission('watchlist_names', ident)
+            and _subject_in_jurisdiction(row.get('criminal_id'), ident)):
+        return row
+    return auth.redact_watchlist_row(row)
 
 def get_heatmap(request):
     df_firs = data_cache['firs']
@@ -1327,7 +1410,7 @@ def get_network():
     return jsonify_safe({"nodes": nodes, "links": links})
 
 
-def get_case_dossier(case_id):
+def get_case_dossier(case_id, jurisdiction=None):
     from sklearn.metrics.pairwise import cosine_similarity
     df_firs = data_cache['firs']
     df_reports = data_cache['reports']
@@ -1628,9 +1711,10 @@ def get_case_dossier(case_id):
         "arrests": arrest_events,
         "chargesheet": chargesheet_info,
         "ai_suggested_suspects": ai_suggested_suspects,
+        "jurisdiction": jurisdiction,
     })
 
-def get_suspect_dossier(suspect_id):
+def get_suspect_dossier(suspect_id, jurisdiction=None):
     """Repeat-offender profile: every case linked to a suspect plus their MO summary."""
     df_suspects = data_cache['suspects']
     df_firs = data_cache['firs']
@@ -1732,12 +1816,22 @@ def get_suspect_dossier(suspect_id):
         "ml_conviction_probability": ml_conviction_prob,
         "ml_conviction_basis": ml_conviction_basis,
         "ml_feature_importances": data_cache.get("suspect_conviction_metrics", {}).get("feature_importances", {}),
-        "correlation_report": correlation_report
+        "correlation_report": correlation_report,
+        "jurisdiction": jurisdiction,
     })
 
-def get_all_cases(request):
-    df = data_cache['firs'].copy()
+def get_all_cases(request, identity=None):
+    df = data_cache['firs']
     a = request.args
+
+    # Jurisdiction first, and from the signed token rather than the query string:
+    # a `district=` parameter below can only narrow what is left, never widen it.
+    scope = (identity or {}).get('scope') or {"level": "state"}
+    if scope.get('level') in ('district', 'station'):
+        df = df[df['district'] == scope['district']]
+    if scope.get('level') == 'station':
+        df = df[df['police_station'] == scope['station']]
+    df = df.copy()
 
     if 'fatalities' in df.columns:
         df['casualties'] = df['fatalities'].fillna(0).astype(int) + df['injured'].fillna(0).astype(int)
@@ -1791,11 +1885,16 @@ def get_all_cases(request):
     limit = a.get('limit', default=150, type=int) or 150
     rows = df[cols].fillna("").head(max(1, min(limit, 400))).to_dict('records')
     src = data_cache['firs']
+    # A scoped officer is offered only the district they can list, so the filter
+    # dropdown does not advertise districts that will always come back empty.
+    districts = ([scope['district']] if scope.get('level') in ('district', 'station')
+                 else sorted(src['district'].unique().tolist()))
     return jsonify_safe({
         "cases": rows, "total": total,
         "crime_types": sorted(src['crime_type'].unique().tolist()),
-        "districts": sorted(src['district'].unique().tolist()),
+        "districts": districts,
         "time_bands": sorted(src['time_of_day'].unique().tolist()),
+        "scope": _scope_block(identity, a.get('district')) if identity else None,
     })
 
 def build_intelligence_briefing():
@@ -1970,21 +2069,111 @@ def route_network():
 
 @app.route('/serverless/api/case/<case_id>', methods=['GET'])
 @audit.audited('read_case_dossier', subject_type='case', subject_arg='case_id')
-@auth.require_role('investigator')
+@auth.require_permission('view_cases')
 def route_case(case_id):
-    return get_case_dossier(case_id)
+    return get_case_dossier(case_id, jurisdiction=_case_jurisdiction(case_id))
 
 @app.route('/serverless/api/cases', methods=['GET'])
 @audit.audited('list_cases')
-@auth.require_role('investigator')
+@auth.require_permission('view_cases')
 def route_cases():
-    return get_all_cases(request)
+    return get_all_cases(request, identity=auth.current_identity())
 
 @app.route('/serverless/api/suspect/<suspect_id>', methods=['GET'])
 @audit.audited('read_offender_dossier', subject_type='offender', subject_arg='suspect_id')
-@auth.require_role('investigator')
+@auth.require_permission('view_dossiers')
 def route_suspect(suspect_id):
-    return get_suspect_dossier(suspect_id)
+    return get_suspect_dossier(suspect_id, jurisdiction=_suspect_jurisdiction(suspect_id))
+
+
+# ---------------------------------------------------------------------------
+# Jurisdiction
+# ---------------------------------------------------------------------------
+# District and station roles see *lists* narrowed to their jurisdiction, taken from
+# the signed token so no query parameter can widen it. Opening a single record
+# outside it is allowed — an investigation crosses district lines every day, and a
+# hard refusal would push officers to borrow a colleague's login — but it leaves a
+# second, specific audit entry and the response says so. That is how a real record
+# system handles it: the access is permitted, and it is conspicuous.
+
+def _scope_block(ident, requested_district=None):
+    """The `scope` field every jurisdiction-filtered list view returns."""
+    scope = ident["scope"]
+    restricted = scope["level"] != "state"
+    out = {"level": scope["level"], "district": scope["district"],
+           "station": scope["station"], "restricted": restricted}
+    if restricted:
+        out["note"] = ("Limited to your jurisdiction by your sign-in. A query parameter "
+                       "can narrow this list but never widen it.")
+        if requested_district and str(requested_district).strip().lower() != scope["district"].lower():
+            out["requested_district_outside_scope"] = requested_district
+    return out
+
+
+def _linked_case_rows(suspect_id):
+    """FIR rows linked to a person in the knowledge graph — the same links the
+    offender dossier lists, so "in scope" means the cases the officer will see."""
+    if not knowledge_graph.has_node(suspect_id):
+        return data_cache['firs'].iloc[0:0]
+    case_ids = [nb for nb in knowledge_graph.neighbors(suspect_id)
+                if knowledge_graph.nodes[nb].get('type') == 'Case']
+    df = data_cache['firs']
+    return df[df['case_id'].isin(case_ids)]
+
+
+def _subject_in_jurisdiction(suspect_id, ident):
+    """A person is in a scoped officer's jurisdiction if any linked case is."""
+    if ident["scope"]["level"] == "state":
+        return True
+    rows = _linked_case_rows(suspect_id)
+    return any(auth.in_jurisdiction(d, st, ident)
+               for d, st in zip(rows['district'], rows['police_station']))
+
+
+def _jurisdiction_result(ident, subject_type, subject_id, in_scope, record):
+    """Build the response block, and audit the read separately when out of scope."""
+    block = {"in_scope": bool(in_scope), "scope": dict(ident["scope"]), "record": record}
+    if not in_scope:
+        audit.record('out_of_jurisdiction_read', subject_type, subject_id,
+                     reason=audit.stated_reason(),
+                     extra={"scope_level": ident["scope"]["level"],
+                            "scope_district": ident["scope"]["district"],
+                            "scope_station": ident["scope"]["station"],
+                            "record_location": record})
+        block["audited"] = True
+        block["note"] = ("This record is outside your jurisdiction. You may read it, and "
+                         "the access has been recorded separately for review.")
+    return block
+
+
+def _case_jurisdiction(case_id):
+    """Jurisdiction block for one FIR, or None if there is no such case (the dossier
+    answers 404 on its own)."""
+    ident = auth.current_identity()
+    df = data_cache['firs']
+    row = df[df['case_id'] == case_id]
+    if row.empty:
+        return None
+    r = row.iloc[0]
+    record = {"district": r['district'], "station": r['police_station']}
+    return _jurisdiction_result(ident, 'case', case_id,
+                                auth.in_jurisdiction(r['district'], r['police_station'], ident),
+                                record)
+
+
+def _suspect_jurisdiction(suspect_id):
+    """Jurisdiction block for one person, or None if there is no such person."""
+    ident = auth.current_identity()
+    sus = data_cache['suspects']
+    if sus[sus['suspect_id'] == suspect_id].empty:
+        return None
+    rows = _linked_case_rows(suspect_id)
+    hits = sum(auth.in_jurisdiction(d, st, ident)
+               for d, st in zip(rows['district'], rows['police_station']))
+    record = {"linked_cases": int(len(rows)), "linked_cases_in_scope": int(hits),
+              "districts": sorted(rows['district'].dropna().unique().tolist())}
+    in_scope = ident["scope"]["level"] == "state" or hits > 0
+    return _jurisdiction_result(ident, 'offender', suspect_id, in_scope, record)
 
 @app.route('/serverless/api/anomalies', methods=['GET'])
 @audit.audited('read_anomalies')
@@ -2034,7 +2223,7 @@ def _sanitize_history(history, max_turns=10):
 @auth.require_role('investigator')
 def route_chat():
     """The long-form copilot. Same engine as /agent, without moving the screen."""
-    data = request.get_json(silent=True) or {}
+    data = _json_object()
     query = (data.get('query') or '').strip()
     if not query:
         return jsonify_safe({"reply": "Ask me about any case, person, district or model."})
@@ -2833,6 +3022,15 @@ CAPABILITIES = [
 
 # Per-page onboarding: what this screen is for and the smartest next moves on it.
 PAGE_GUIDE = {
+    "/overview": ("the Command Overview — headline metrics, emerging trend spikes, behavioural anomalies, crime "
+                  "charts and the hour-by-weekday FIR heatmap",
+                  ["Which districts are heating up?", "When do chain snatchings happen?", "How many police should we deploy?"]),
+    "/fir/new": ("the FIR registration form — station, offence and sections, complainant, victims, accused, brief facts",
+                 ["Which section applies to chain snatching?", "Is SUS-1001 in the registry?", "What happens after I register?"]),
+    "/news": ("Live News — Karnataka crime and policing headlines, tagged by district and crime type",
+              ["What's happening in Bengaluru right now?", "Any narcotics news?", "Compare news with our FIRs"]),
+    "/access": ("Account & roles — your role, jurisdiction, the role/permission matrix and the persona switcher",
+                ["What can my role do?", "Who can verify CCTV matches?", "Who can register FIRs?"]),
     "/": ("the Command Overview — headline metrics, emerging trend spikes, behavioural anomalies and crime charts",
           ["Which districts are heating up?", "Show behavioural anomalies", "How many police should we deploy?"]),
     "/cases": ("the Case Registry — every FIR, filterable by district, crime type, severity and casualties",
@@ -3026,7 +3224,49 @@ def run_agent(query, history=None, lang=None, page=None, context=None):
     return result
 
 
+def _json_object():
+    """The request body if it is a JSON object, else {} — a list or a bare string
+    must be a 400 from the handler's own validation, never a 500 on `.get`."""
+    body = request.get_json(silent=True)
+    return body if isinstance(body, dict) else {}
+
+
+def _copilot_cache():
+    """The corpus as the caller's jurisdiction lets Kavya see it.
+
+    A statewide role reads the whole cache. A district or station role gets a view
+    whose FIR frame is cut to its jurisdiction — the same rule /cases enforces — and
+    whose CCTV alerts are pinned to its district, so the copilot cannot be used to
+    read around the case list. The view is memoised per scope and per loaded corpus,
+    so its copilot index is built once.
+    """
+    from flask import has_request_context
+    if not has_request_context():
+        return data_cache      # an internal call (warm-up, tests): no caller, no scope
+    scope = auth.current_identity().get("scope") or {}
+    level = scope.get("level")
+    firs = data_cache.get("firs")
+    if level not in ("district", "station") or firs is None:
+        return data_cache
+    key = (level, scope.get("district"), scope.get("station"), id(firs), len(firs))
+    views = data_cache.setdefault("_scoped_views", {})
+    view = views.get(key)
+    if view is None:
+        mask = firs["district"] == scope.get("district")
+        if level == "station":
+            mask &= firs["police_station"] == scope.get("station")
+        view = {k: v for k, v in data_cache.items() if k not in ("_scoped_views", "_copilot_index")}
+        view["firs"] = firs[mask].reset_index(drop=True)
+        view["_scope_district"] = scope.get("district")
+        view["_scope_label"] = scope.get("station") or scope.get("district")
+        for stale in [k for k in views if k[3] != id(firs) or k[4] != len(firs)]:
+            views.pop(stale, None)
+        views[key] = view
+    return view
+
+
 def _run_agent(query, history=None, lang=None, page=None, context=None):
+    cache = _copilot_cache()
     text = (query or "").strip()
     if not text:
         return {"action": "answer", "params": {}, "reply": "How can I assist your investigation?",
@@ -3050,7 +3290,7 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
 
     # A follow-up that leans on the conversation ("what about Mysuru?", "show them on the
     # map") becomes a self-contained request before anything routes it.
-    resolved = copilot_engine.rewrite_followup(text, history, copilot_engine._index(data_cache))
+    resolved = copilot_engine.rewrite_followup(text, history, copilot_engine._index(cache))
     if resolved != text:
         LOG.info("follow-up resolved: %r -> %r", text, resolved)
         text = resolved
@@ -3070,7 +3310,23 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
         return cs
 
     # "open an extortion case", "show chain-snatching cases" → a REAL case/list of that crime type.
-    crime = _resolve_crime_intent(text)
+    # "forecast chain snatching in Bengaluru", "busiest day for murders in Mysuru" name a
+    # crime type but ask for numbers; they must reach the engine, not a case list.
+    analytic = copilot_engine.is_analytic_question(text) or bool(
+        copilot_engine.NEWS_CUE.search(text.lower()) and not copilot_knowledge.is_platform_question(text))
+    crime = None if analytic else _resolve_crime_intent(text)
+    if crime and cache is not data_cache:
+        # The list the officer lands on is cut to their jurisdiction by /cases; the
+        # spoken count must be the same number, not the statewide one.
+        prm = crime.get("params") or {}
+        f = cache["firs"]
+        if prm.get("crime_type"):
+            f = f[f["crime_type"] == prm["crime_type"]]
+        where = cache.get("_scope_district")
+        asked = prm.get("district")
+        crime["reply"] = (f"Showing {len(f)} {prm.get('crime_type') or ''} cases in your jurisdiction"
+                          f" ({where})." + (f" {asked} is outside it, so its cases are not listed."
+                                            if asked and asked != where else "")).replace("  ", " ")
     if crime:
         crime["suggestions"] = _suggest_next(crime["action"], crime.get("params", {}))
         crime["transcript"] = text
@@ -3087,7 +3343,7 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
     # A navigation command ("open FIR-20345", "show heatmap of Mysuru"): go there at
     # once, and say something worth hearing about what is on that screen rather than
     # a bare "Opening dossier".
-    if det and not question and det["action"] != "answer":
+    if det and not question and not analytic and det["action"] != "answer":
         action = det["action"]
         params = dict(det.get("params", {}))
         if action in ("show_heatmap", "show_dispatch", "recent_cases") and not params.get("district") \
@@ -3112,14 +3368,14 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
     if llm_available():
         try:
             result = copilot_engine.llm_answer(
-                text, data_cache, LLM_PROVIDERS, history=_sanitize_history(history, 8),
+                text, cache, LLM_PROVIDERS, history=_sanitize_history(history, 8),
                 lang_directive=_lang_directive(lang), briefing=build_intelligence_briefing(),
                 page=page, context=context, extra_facts=grounded["reply"] if grounded else None)
         except Exception as e:
             LOG.warning("copilot LLM loop failed, answering deterministically: %s", e)
             result = None
     if result is None:
-        offline = copilot_engine.offline_answer(text, data_cache, context, history)
+        offline = copilot_engine.offline_answer(text, cache, context, history)
         if grounded and offline is None:
             # A computed answer from agent_answers already says exactly this.
             result = {"reply": grounded["reply"], "trace": [], "nav": None, "mode": "deterministic",
@@ -3137,7 +3393,7 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
         # distrust the tool exactly when it is behaving correctly.
         # Never dead-end. Say plainly what is not in the records, then give the officer
         # something useful: the live statewide picture.
-        brief = copilot_engine.compose([(("situation", {}), copilot_engine.tool_situation(data_cache))])
+        brief = copilot_engine.compose([(("situation", {}), copilot_engine.tool_situation(cache))])
         return _agent_response("answer", {}, (
             "I don't have that in the KSP records or the camera network, and without a connected "
             "language model I can't answer general questions. Here is what is happening across "
@@ -3146,7 +3402,7 @@ def _run_agent(query, history=None, lang=None, page=None, context=None):
             extra={"trace": [copilot_engine._trace("situation", {}, {})], "mode": "deterministic"})
 
     nav = result.get("nav") or {}
-    if not nav and det and det["action"] in _ANSWERABLE_NAV:
+    if not nav and det and det["action"] in _ANSWERABLE_NAV and not analytic:
         nav = {"action": det["action"], "params": det.get("params", {})}
     action = nav.get("action") or "answer"
     params = {k: v for k, v in (nav.get("params") or {}).items() if _valid_param(v)}
@@ -3369,7 +3625,7 @@ def route_conversations():
     if request.method == 'OPTIONS':
         return '', 204
     if request.method == 'POST':
-        data = request.get_json(silent=True) or {}
+        data = _json_object()
         return jsonify_safe(conversations.create(_actor(), data.get('title')), status=201)
     return jsonify_safe({"conversations": conversations.list_for(_actor(), request.args.get('q'))})
 
@@ -3383,7 +3639,7 @@ def route_conversation(cid):
     if request.method == 'OPTIONS':
         return '', 204
     if request.method == 'POST':
-        data = request.get_json(silent=True) or {}
+        data = _json_object()
         if data.get('delete'):
             ok = conversations.delete(_actor(), cid)
             return jsonify_safe({"deleted": ok}, status=200 if ok else 404)
@@ -3400,7 +3656,7 @@ def route_conversation_message(cid):
     """Ask within a saved conversation: its own history is the context."""
     if request.method == 'OPTIONS':
         return '', 204
-    data = request.get_json(silent=True) or {}
+    data = _json_object()
     text = (data.get('content') or '').strip()
     if not text:
         return jsonify_safe({"error": "empty message"}, status=400)
@@ -3436,36 +3692,109 @@ def route_surv_camera(camera_id):
     return jsonify_safe(out) if out else (jsonify_safe({"error": "no such camera"}, status=404))
 
 
+# A camera district no real camera has. Passed when a scoped officer asks for a
+# district outside their jurisdiction, so the filter matches nothing and every count
+# in the response is computed over that empty set — rather than silently swapping in
+# their own district and returning numbers for a place they did not ask about.
+_OUTSIDE_JURISDICTION = "\x00outside-jurisdiction"
+
+
+def _surveillance_district(ident, requested):
+    """District filter for the camera feed and alert queue. Cameras carry a district,
+    not a station, so a station officer sees their station's district."""
+    scope = ident["scope"]
+    if scope["level"] == "state":
+        return requested
+    if requested and str(requested).strip().lower() != scope["district"].lower():
+        return _OUTSIDE_JURISDICTION
+    return scope["district"]
+
+
 @app.route('/serverless/api/surveillance/feed', methods=['GET'])
 @audit.audited('read_surveillance_feed')
-@auth.require_role('investigator')
+@auth.require_permission('surveillance_view')
 def route_surv_feed():
     a = request.args
-    return jsonify_safe(surveillance.feed(
+    ident = auth.current_identity()
+    out = surveillance.feed(
         data_cache, _actor(), since=a.get('since', type=float), camera_id=a.get('camera'),
         kind=a.get('kind'), matches_only=a.get('matches_only') in ('1', 'true'),
-        limit=a.get('limit', default=80, type=int), district=a.get('district')))
+        limit=a.get('limit', default=80, type=int),
+        district=_surveillance_district(ident, a.get('district')))
+    out["scope"] = _scope_block(ident, a.get('district'))
+    return jsonify_safe(out)
 
 
 @app.route('/serverless/api/surveillance/alerts', methods=['GET'])
 @audit.audited('read_surveillance_alerts')
-@auth.require_role('investigator')
+@auth.require_permission('surveillance_view')
 def route_surv_alerts():
     a = request.args
-    return jsonify_safe(surveillance.alerts(
+    ident = auth.current_identity()
+    out = surveillance.alerts(
         data_cache, _actor(), since=a.get('since', type=float), status=a.get('status'),
-        priority=a.get('priority'), district=a.get('district'), limit=a.get('limit', default=100, type=int)))
+        priority=a.get('priority'), district=_surveillance_district(ident, a.get('district')),
+        limit=a.get('limit', default=100, type=int))
+    out["scope"] = _scope_block(ident, a.get('district'))
+    return jsonify_safe(out)
+
+
+# Which permission each decision needs. Acknowledging only says "seen"; verifying or
+# rejecting asserts something about an identification, and escalating moves it up the
+# chain, so those are held to the ranks that carry that responsibility. Reopen undoes
+# a verify/reject and is held to the same bar. An action not listed here falls
+# through to surveillance.decide, which answers 400 for it.
+_DECISION_PERMISSION = {
+    "acknowledge": "surveillance_view",
+    "verify": "surveillance_decide",
+    "reject": "surveillance_decide",
+    "reopen": "surveillance_decide",
+    "escalate": "surveillance_escalate",
+}
+
+
+def _sighting_district(event_id):
+    """District of the camera that produced a sighting, or None if there is no such
+    (past) sighting — in which case surveillance.decide gives the 404."""
+    surveillance.ensure(data_cache)
+    e = surveillance._find_event(event_id)
+    if not e or e["ts"] > time.time():
+        return None
+    st = surveillance._state
+    return st["cameras"][st["cam_index"][e["camera_id"]]]["district"]
 
 
 @app.route('/serverless/api/surveillance/alerts/<event_id>', methods=['POST', 'OPTIONS'])
 @audit.audited('decide_surveillance_alert', subject_type='sighting', subject_arg='event_id')
-@auth.require_role('investigator')
+@auth.require_permission('surveillance_view')
 def route_surv_decide(event_id):
     if request.method == 'OPTIONS':
         return '', 204
-    data = request.get_json(silent=True) or {}
-    out, status = surveillance.decide(data_cache, _actor(), event_id, data.get('action'), data.get('note'))
-    return jsonify_safe(out, status=status)
+    data = _json_object()
+    action = data.get('action')
+    if not isinstance(action, str):
+        # A list or object here would otherwise reach a dict lookup and 500.
+        return jsonify_safe({"error": "action must be one of "
+                                      + str(sorted(_DECISION_PERMISSION))}), 400
+    ident = auth.current_identity()
+    needed = _DECISION_PERMISSION.get(action)
+    # Refusals are returned as (body, status) tuples: the audit wrapper reads the
+    # status from the tuple, so a refused decision is logged as denied, not ok.
+    if needed and not auth.has_permission(needed, ident):
+        return jsonify_safe(dict(auth.forbidden_body(needed, ident), action=action)), 403
+    if needed and ident["scope"]["level"] != "state":
+        district = _sighting_district(event_id)
+        if district is not None and district != ident["scope"]["district"]:
+            # Reading across a boundary is allowed and audited; acting on another
+            # district's alert is not — that district's officers own the response.
+            return jsonify_safe({
+                "error": "outside_jurisdiction",
+                "alert_district": district,
+                "scope": dict(ident["scope"]),
+                "hint": "Decisions on an alert belong to the officers of its district.",
+            }), 403
+    out, status = surveillance.decide(data_cache, _actor(), event_id, action, data.get('note'))
+    return jsonify_safe(out), status
 
 
 @app.route('/serverless/api/surveillance/track/<suspect_id>', methods=['GET'])
@@ -3490,7 +3819,7 @@ def route_surv_plate():
 def route_surv_watchlist():
     if request.method == 'OPTIONS':
         return '', 204
-    data = (request.get_json(silent=True) or {}) if request.method == 'POST' else {}
+    data = (_json_object()) if request.method == 'POST' else {}
     out, status = surveillance.watchlist(data_cache, _actor(), add=data.get('add'), remove=data.get('remove'))
     return jsonify_safe(out, status=status)
 
@@ -3764,12 +4093,21 @@ def route_recidivism():
     control exists at all.
     """
     r = data_cache.get('recidivism', {}) or {}
-    top = r.get('top', []) or []
     ident = auth.current_identity()
-    full = auth.has_role('supervisor')
+    named = auth.has_permission('watchlist_names', ident)
+    top = [_redacted_watchlist_row(row, ident) for row in (r.get('top', []) or [])]
+    redacted_rows = sum(1 for row in top if row.get('redacted'))
+    full = named and redacted_rows == 0
 
-    if not full:
-        top = [auth.redact_watchlist_row(row) for row in top]
+    if full:
+        note = None
+    elif named:
+        note = ("Named only for offenders with a case in your jurisdiction; the rest of "
+                "the statewide watchlist is pseudonymised.")
+    else:
+        note = ("Identifiers are pseudonymised and every person-level attribute is "
+                "withheld. Sign in with a role holding watchlist_names (supervisor, "
+                "DGP, admin, or a district SP for their district) for names.")
 
     return jsonify_safe({
         "top": top,
@@ -3780,11 +4118,13 @@ def route_recidivism():
             "role": ident['role'],
             "authenticated": ident['authenticated'],
             "redacted": not full,
+            "redacted_rows": redacted_rows,
+            # Kept for existing clients; `required_permission` is the real gate.
             "required_role": "supervisor",
+            "required_permission": "watchlist_names",
+            "scope": _scope_block(ident),
             "retained_fields": sorted(auth.WATCHLIST_PUBLIC_FIELDS),
-            "note": (None if full else
-                     "Identifiers are pseudonymised and every person-level attribute is "
-                     "withheld. Sign in with a supervisor account for the full watchlist."),
+            "note": note,
         },
     })
 
@@ -3794,7 +4134,7 @@ def route_auth_login():
     """Exchange credentials for a bearer token."""
     if request.method == 'OPTIONS':
         return '', 204
-    body = request.get_json(silent=True) or {}
+    body = _json_object()
     username = body.get('username', '')
     token, outcome = auth.authenticate(username, body.get('password', ''))
 
@@ -3812,11 +4152,15 @@ def route_auth_login():
         audit.record('auth_login', 'account', username, result='denied', status=401)
         return jsonify_safe({"error": "invalid_credentials"}, status=401)
 
+    # The identity is read back out of the token just issued, not rebuilt from the
+    # account, so what the client is told it holds is exactly what it was signed for.
+    identity = auth.identity_from_payload(auth.verify_token(token))
     audit.record('auth_login', 'account', username, result='ok', status=200,
-                 extra={"granted_role": outcome})
+                 extra={"granted_role": outcome, "granted_scope": identity["scope"]})
     return jsonify_safe({"token": token, "role": outcome,
                          "username": username,
-                         "expires_in": auth.TOKEN_TTL_SECONDS})
+                         "expires_in": auth.TOKEN_TTL_SECONDS,
+                         "identity": identity})
 
 
 @app.route('/serverless/api/auth/me', methods=['GET'])
@@ -3826,8 +4170,56 @@ def route_auth_me():
     return jsonify_safe(auth.describe())
 
 
+@app.route('/serverless/api/auth/roles', methods=['GET'])
+def route_auth_roles():
+    """The role / permission / jurisdiction matrix the server enforces.
+
+    Open, like /auth/me: the policy is not a secret, and a sign-in page that renders
+    this instead of a hardcoded copy cannot drift from what the gates actually do.
+    """
+    return jsonify_safe(auth.roles_catalog())
+
+
+@app.route('/serverless/api/auth/demo', methods=['GET', 'POST', 'OPTIONS'])
+def route_auth_demo():
+    """One-click demo personas. Exists only in demo mode.
+
+    Outside demo mode this is a 404, not a 403: a deployment with real accounts has
+    no persona switcher, and the endpoint should not even advertise that one could
+    exist. In demo mode the credentials are public anyway, so issuing a persona's
+    token without a password grants nothing a reader of the README could not — but
+    every issue is audited exactly like a password login.
+    """
+    if request.method == 'OPTIONS':
+        return '', 204
+    if not auth.demo_mode():
+        return jsonify_safe({"error": "not_found"}), 404
+    if request.method == 'GET':
+        return jsonify_safe(auth.demo_catalog())
+
+    body = _json_object()
+    persona = body.get('persona')
+    try:
+        token, role, username, identity = auth.issue_persona_token(
+            persona, body.get('district'))
+    except auth.PersonaError as e:
+        audit.record('auth_demo_persona', 'account', persona, result='denied', status=400,
+                     extra={"error": str(e), "requested_district": body.get('district')})
+        return jsonify_safe({
+            "error": str(e),
+            "accepted_personas": [p["id"] for p in auth.DEMO_PERSONAS],
+            "accepted_districts": auth.demo_catalog()["districts"],
+        }), 400
+
+    audit.record('auth_demo_persona', 'account', username, result='ok', status=200,
+                 extra={"persona": persona, "granted_role": role,
+                        "granted_scope": identity["scope"]})
+    return jsonify_safe({"token": token, "role": role, "username": username,
+                         "expires_in": auth.TOKEN_TTL_SECONDS, "identity": identity})
+
+
 @app.route('/serverless/api/audit-log', methods=['GET'])
-@auth.require_role('supervisor')
+@auth.require_permission('audit_read')
 def route_audit_log():
     """Who accessed which person's record, and whether they said why.
 
@@ -3847,7 +4239,7 @@ def route_audit_log():
 
 
 @app.route('/serverless/api/subject-report/<subject_id>', methods=['GET'])
-@auth.require_role('supervisor')
+@auth.require_permission('audit_read')
 def route_subject_report(subject_id):
     """Everything this system holds and asserts about one person.
 
@@ -3878,7 +4270,7 @@ def route_raise_contest():
     """
     import contest as contest_module
 
-    body = request.get_json(silent=True) or {}
+    body = _json_object()
     subject_id = body.get('subject_id')
     grounds = body.get('grounds')
     if not subject_id:
@@ -3900,13 +4292,13 @@ def route_raise_contest():
 
 
 @app.route('/serverless/api/contest/resolve', methods=['POST'])
-@auth.require_role('supervisor')
+@auth.require_permission('contest_resolve')
 def route_resolve_contest():
     """Close a challenge. The original entry is never rewritten — the resolution is
     appended, so the history of a disputed assessment stays readable."""
     import contest as contest_module
 
-    body = request.get_json(silent=True) or {}
+    body = _json_object()
     contest_id = body.get('contest_id')
     subject_id = body.get('subject_id')
     status = body.get('status')
@@ -3934,7 +4326,7 @@ def route_resolve_contest():
 
 
 @app.route('/serverless/api/contests', methods=['GET'])
-@auth.require_role('supervisor')
+@auth.require_permission('contest_resolve')
 def route_open_contests():
     """Every open challenge. A queue nobody can see is a queue nobody works."""
     import contest as contest_module
@@ -3945,7 +4337,7 @@ def route_open_contests():
 
 
 @app.route('/serverless/api/retention', methods=['GET'])
-@auth.require_role('supervisor')
+@auth.require_permission('system_admin')
 def route_retention():
     """What personal data this system holds, for how long, and how much is overdue.
 
@@ -3961,7 +4353,7 @@ def route_retention():
 
 
 @app.route('/serverless/api/retention/purge', methods=['POST'])
-@auth.require_role('supervisor')
+@auth.require_permission('system_admin')
 def route_retention_purge():
     """Delete entries past their retention date.
 
@@ -3971,7 +4363,7 @@ def route_retention_purge():
     """
     import retention
 
-    body = request.get_json(silent=True) or {}
+    body = _json_object()
     apply_it = bool(body.get('apply'))
     sink = body.get('sink') or None
 
@@ -3987,7 +4379,7 @@ def route_retention_purge():
 
 
 @app.route('/serverless/api/retention/erase', methods=['POST'])
-@auth.require_role('supervisor')
+@auth.require_permission('system_admin')
 def route_retention_erase():
     """Erase a person's assessments on request.
 
@@ -3999,7 +4391,7 @@ def route_retention_erase():
     """
     import retention
 
-    body = request.get_json(silent=True) or {}
+    body = _json_object()
     subject_id = body.get('subject_id')
     if not subject_id:
         return jsonify_safe({"error": "subject_id is required"}), 400
@@ -4049,7 +4441,7 @@ def route_model_performance():
 
 
 @app.route('/serverless/api/models/replay', methods=['POST'])
-@auth.require_role('supervisor')
+@auth.require_permission('system_admin')
 def route_models_replay():
     """Score the held-out window through the serving artifact and feed the real
     recorded results into the feedback loop.
@@ -4066,7 +4458,7 @@ def route_models_replay():
     """
     import replay_outcomes
 
-    body = request.get_json(silent=True) or {}
+    body = _json_object()
     apply_it = bool(body.get('apply'))
     limit = _parse_int(body.get('limit'), 400)
     limit = max(1, min(limit, 5000))
@@ -4120,7 +4512,7 @@ def route_record_outcome():
     """
     from ml import outcomes as ml_outcomes
 
-    body = request.get_json(silent=True) or {}
+    body = _json_object()
     model = body.get('model')
     subject_id = body.get('subject_id')
     outcome = body.get('outcome')
@@ -4155,7 +4547,7 @@ def route_record_outcome():
 
 
 @app.route('/serverless/api/audit-log/verify', methods=['GET'])
-@auth.require_role('supervisor')
+@auth.require_permission('audit_read')
 def route_audit_verify():
     """Recompute the audit log's hash chain and report the first entry that disagrees.
 
@@ -4351,7 +4743,7 @@ def route_classify():
     """Live demo: read any FIR-style narrative and predict the crime type."""
     if request.method == 'OPTIONS':
         return '', 204
-    data = request.get_json(silent=True) or {}
+    data = _json_object()
     text = data.get('text', '')
     fn = models.get('crime_classifier')
     preds = fn(text) if fn else []
@@ -4363,6 +4755,8 @@ def route_analytics():
     """One-shot summary powering the Analytics page: model outputs + metrics."""
     fc = data_cache.get('forecast', {}) or {}
     rec = data_cache.get('recidivism', {}) or {}
+    ident = auth.current_identity()
+    watchlist_top = [_redacted_watchlist_row(r, ident) for r in rec.get('top', [])[:10]]
     return jsonify_safe({
         "forecast": {
             "overall": fc.get('overall'),
@@ -4383,8 +4777,12 @@ def route_analytics():
         # Redacted through the same allowlist as /recidivism. Serving the full rows
         # here made the gate on /recidivism decorative: the same ten named people,
         # same scores, one route over, no credentials.
-        "recidivism": {"top": [_redacted_watchlist_row(r) for r in rec.get('top', [])[:10]],
-                       "redacted": not auth.has_role('supervisor'),
+        "recidivism": {"top": watchlist_top,
+                       # True if any row arrived pseudonymised — always for a caller
+                       # without `watchlist_names`, partly for a district SP.
+                       "redacted": (any(r.get('redacted') for r in watchlist_top)
+                                    if watchlist_top else
+                                    not auth.has_permission('watchlist_names')),
                        "bands": rec.get('bands', {}),
                        "weights": rec.get('weights', {}), "mean_index": rec.get('mean_index')},
         "classifier": data_cache.get('classifier_metrics', {}),
@@ -4645,14 +5043,14 @@ def route_analytics_compare():
 def route_agent():
     if request.method == 'OPTIONS':
         return '', 204
-    data = request.get_json(silent=True) or {}
+    data = _json_object()
     return jsonify_safe(run_agent(data.get('query', ''), data.get('history'),
                                   data.get('lang'), data.get('page'), data.get('context')))
 
 
 @app.route('/serverless/api/sync', methods=['POST', 'OPTIONS'])
 @audit.audited('rebuild_corpus')
-@auth.require_role('supervisor')
+@auth.require_permission('system_admin')
 def route_sync():
     if request.method == 'OPTIONS':
         return '', 204
@@ -4667,11 +5065,11 @@ def route_sync():
 
 @app.route('/serverless/api/settings', methods=['POST', 'OPTIONS'])
 @audit.audited('update_settings')
-@auth.require_role('supervisor')
+@auth.require_permission('system_admin')
 def route_settings():
     if request.method == 'OPTIONS':
         return '', 204
-    data = request.get_json(silent=True) or {}
+    data = _json_object()
     if 'NVIDIA_API_KEY' in data:
         os.environ['NVIDIA_API_KEY'] = data['NVIDIA_API_KEY']
     return jsonify_safe({"status": "success", "message": "Settings updated"})

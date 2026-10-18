@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Lock, ArrowRight } from "lucide-react";
 
 /**
@@ -23,6 +24,7 @@ export default function AccessRequired({
   what?: string;
   requires?: string;
 }) {
+  const pathname = usePathname();
   return (
     <div className="flex min-h-[52vh] flex-col items-center justify-center px-6 text-center">
       <span className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-brand/12 text-brand">
@@ -39,10 +41,10 @@ export default function AccessRequired({
         registry — remains available without signing in.
       </p>
       <Link prefetch={false}
-        href="/access"
+        href={`/?next=${encodeURIComponent(pathname || "/overview")}`}
         className="mt-6 inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110"
       >
-        Go to access control <ArrowRight className="h-4 w-4" />
+        Sign in <ArrowRight className="h-4 w-4" />
       </Link>
     </div>
   );

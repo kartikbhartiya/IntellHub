@@ -48,7 +48,14 @@ TOPICS = {
         "keywords": ["page", "pages", "screen", "screens", "navigate", "menu", "where can i",
                      "where do i", "dashboard", "ui", "interface", "tab"],
         "text": (
-            "Overview (/) — state-wide KPIs, trend alerts, anomalies and charts. "
+            "Sign-in (/) — official login with the Karnataka emblem and one-click demo personas "
+            "(DGP, Admin, SP, DSP, SHO, SI, Analyst). "
+            "Overview (/overview) — state-wide KPIs, trend alerts, anomalies, charts and the "
+            "hour-by-weekday heatmap of when FIRs happen. "
+            "Register FIR (/fir/new) — four-step CCTNS-schema FIR registration for station and "
+            "district roles. "
+            "Live News (/news) — Karnataka crime and policing headlines aggregated from news APIs, "
+            "tagged by district and crime type. "
             "Cases (/cases) — searchable FIR directory filtered by district, crime type, status. "
             "Case dossier (/case?id=) — one FIR: narrative, accused, victim, IO, court status, "
             "similar cases (MO + proximity + narrative similarity) and AI suspect matching. "
@@ -56,17 +63,20 @@ TOPICS = {
             "zones and time-of-day filters. "
             "Network (/network) — force-directed 2D/3D link graph of suspects, FIRs, officers, "
             "cyber identifiers and vehicles, with predicted links and syndicates. "
-            "Analytics (/analytics) — forecast, clusters, recidivism, link prediction, "
-            "socio-economic correlation and the model registry. "
+            "Analytics (/analytics) — weekly forecast, annual crime-trend forecast per district "
+            "(backtested against baselines), clusters, recidivism, link prediction, socio-economic "
+            "correlation, the by-occupation profile and the model registry. "
             "Registry (/intel) — criminals/rowdy-sheeters, vehicles, missing persons, cyber, "
             "courts, officers tabs. "
             "Offender dossier (/suspect?id=) — one person: record, linked cases, associates, "
             "risk drivers. "
             "Officers (/officers) — roster, closure rates, assignment recommendations. "
-            "Lifecycle (/lifecycle) — FIR → arrest → chargesheet → trial → conviction funnel. "
+            "Lifecycle (/lifecycle) — FIR → arrest → chargesheet → trial → conviction funnel and "
+            "the case-flow Sankey (crime type → status → outcome). "
             "Pendency (/pendency) — survival-model triage of the open docket. "
             "Dispatch (/dispatch) — district risk index and recommended patrol strength. "
-            "Access (/access) — sign-in, roles and the audit log."),
+            "Account & roles (/access) — identity, jurisdiction, the role/permission matrix and "
+            "the demo persona switcher."),
     },
     "data": {
         "title": "Data model",

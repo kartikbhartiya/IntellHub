@@ -13,10 +13,12 @@ import {
   Folders,
   HeartPulse,
   SlidersHorizontal,
+  FilePlus2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import AccessRequired from "@/components/AccessRequired";
 import ExportButton from "@/components/ExportButton";
+import { useIdentity } from "@/lib/session";
 
 const STATUSES = ["All", "Open", "Investigating", "Closed"];
 const SORTS = [
@@ -27,6 +29,8 @@ const SORTS = [
 
 function CasesContent() {
   const router = useRouter();
+  const { identity } = useIdentity();
+  const canRegister = !!identity?.permissions?.includes("register_fir");
   const searchParams = useSearchParams();
 
   const [filters, setFilters] = useState({
@@ -160,6 +164,15 @@ function CasesContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canRegister && (
+            <Link
+              prefetch={false}
+              href="/fir/new"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+            >
+              <FilePlus2 className="h-4 w-4" /> Register FIR
+            </Link>
+          )}
           <ExportButton
             rows={cases}
             columns={[

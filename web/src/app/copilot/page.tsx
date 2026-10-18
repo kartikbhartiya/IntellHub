@@ -246,7 +246,7 @@ function CopilotInner() {
         <Lock className="mx-auto h-8 w-8 text-brand" />
         <h1 className="mt-3 text-xl font-bold text-ink">Copilot needs an investigator sign-in</h1>
         <p className="mt-1 text-[13.5px] text-muted">Conversations read case files and person records, and are saved to your account.</p>
-        <Link href="/access" className="mt-4 inline-block rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-white">Sign in</Link>
+        <Link href="/?next=%2Fcopilot" className="mt-4 inline-block rounded-full bg-ink px-5 py-2 text-[13px] font-semibold text-white">Sign in</Link>
       </div>
     );
 

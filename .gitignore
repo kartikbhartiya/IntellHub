@@ -75,3 +75,7 @@ appsail/contests.jsonl
 # Surveillance alert decisions and saved copilot conversations. Runtime records.
 appsail/surveillance_decisions.jsonl
 appsail/copilot_conversations.json
+
+# Runtime stores written by the app (never commit)
+appsail/registered_firs.jsonl
+appsail/camera_streams.json

@@ -1413,7 +1413,7 @@ def tool_situation(cache, district=None, **_):
     last7 = sel[sel["_ts"] > end - 7 * day]
     prev7 = sel[(sel["_ts"] <= end - 7 * day) & (sel["_ts"] > end - 14 * day)]
     last30 = sel[sel["_ts"] > end - 30 * day]
-    out = {"scope": d or "Karnataka", "records_up_to": f"{end:%Y-%m-%d}",
+    out = {"scope": d or cache.get("_scope_label") or "Karnataka", "records_up_to": f"{end:%Y-%m-%d}",
            "last_7_days": int(len(last7)), "previous_7_days": int(len(prev7)),
            "last_30_days": int(len(last30)),
            "last_30_by_crime": last30["crime_type"].value_counts().head(5).to_dict(),
@@ -1439,7 +1439,7 @@ def tool_situation(cache, district=None, **_):
         out["patrol"] = {k: disp.get(k) for k in ("risk_score", "risk_level", "recommended_officers")}
     try:
         import surveillance
-        a = surveillance.alerts(cache, None, district=d, limit=4)
+        a = surveillance.alerts(cache, None, district=cache.get("_scope_district") or d, limit=4)
         cams = surveillance.cameras(cache, district=d)
         out["live_cameras"] = {"cameras": len(cams["cameras"]),
                                "online": sum(c["status"] == "online" for c in cams["cameras"]),
@@ -1479,8 +1479,9 @@ def tool_sightings(cache, person_ref=None, plate=None, district=None, **_):
                 "recent_reads": [{"time": x["time"], "camera": x["camera_name"], "read": x["plate_read"]}
                                  for x in r["recent_reads"]]}
     d = detect_district(district, idx) if district else None
-    a = surveillance.alerts(cache, None, district=d, limit=6)
-    return {"scope": d or "Karnataka", "counts_24h": a["counts"],
+    # A district or station officer's copilot reads their own district's alerts only.
+    a = surveillance.alerts(cache, None, district=cache.get("_scope_district") or d, limit=6)
+    return {"scope": d or cache.get("_scope_label") or "Karnataka", "counts_24h": a["counts"],
             "alerts": [{"time": x["time"], "camera": x["camera_name"], "district": x["district"],
                         "priority": x["priority"], "reasons": x["reasons"], "status": x["status"],
                         "person": (x.get("face_match") or {}).get("suspect_id"),
@@ -1489,7 +1490,98 @@ def tool_sightings(cache, person_ref=None, plate=None, district=None, **_):
             "policy": a["policy"]}
 
 
+def tool_news(cache, district=None, crime_type=None, topic=None, query=None, lang="en", limit=6, **_):
+    """Live News: public Karnataka police and public-safety headlines, each tied to our FIR counts.
+
+    Headlines are public reporting, not records: the tool says which sources answered and
+    never fills an empty feed. `news` is imported here, not at module level, because it
+    imports this module for the district aliases and crime vocabulary it shares.
+    """
+    import news
+    idx = _index(cache)
+    d = None
+    if district:
+        d = (detect_district(district, idx) if idx is not None else None) or news.resolve_district(district)
+        if not d:
+            return {"error": f"'{district}' is not a Karnataka district I can match"}
+    ct = None
+    cat = news.resolve_category(topic) if topic else None
+    if crime_type:
+        ct = detect_crime(crime_type, idx) if idx is not None else None
+        if not ct and idx is not None and crime_type in idx.crime_types:
+            ct = crime_type
+        if not ct:
+            cat = cat or news.resolve_category(crime_type)     # "sexual assault" -> women & child safety
+    return news.brief(cache, district=d, category=cat, crime_type=ct, q=query or None,
+                      lang="kn" if lang == "kn" else "en", limit=limit)
+
+
+def _bound(mod, cache):
+    """trend_forecast / temporal read through a configured getter; make sure it is this cache."""
+    if (mod._cache_getter() or {}).get("firs") is not cache.get("firs"):
+        mod.configure(lambda: cache)
+    return mod
+
+
+def tool_annual_forecast(cache, district=None, crime_type=None, year=None, **_):
+    """Annual FIR forecast for a district (or the state) and year, with its backtested accuracy."""
+    import trend_forecast as T
+    _bound(T, cache)
+    idx = _index(cache)
+    d = (detect_district(district, idx) if (district and idx is not None) else None) or district
+    ct = (detect_crime(crime_type, idx) if (crime_type and idx is not None) else None) or crime_type
+    try:
+        f = T.forecast(d, year, ct)
+        card = T.meta(ct)["model"]["backtest"].get("1", {})
+    except T.ForecastError as e:
+        return {"error": str(e)}
+    return {
+        "unit": f["unit"], "year": f["year"], "crime_type": f["crime_type"] or "all crime types",
+        "kind": f["kind"], "predicted": f["predicted"], "interval_80": f["interval"],
+        "last_year": f["last_year"], "last_count": f["last_count"], "change_vs_last_pct": f["change_vs_last_pct"],
+        "change_exceeds_noise_band": f["change_exceeds_band"], "actual": f["actual"],
+        "inside_interval": f["inside_interval"], "per_lakh": f["per_lakh"], "explanation": f["explanation"],
+        "top_crime_types": (f.get("by_crime_type") or [])[:4],
+        "backtest": {"mae": (card.get("model") or {}).get("mae"), "skill_vs_last_year": card.get("skill_vs_last_year"),
+                     "verdict_vs_best_baseline": (card.get("significance_vs_best_baseline") or {}).get("verdict"),
+                     "best_baseline": card.get("best_baseline")},
+        "note": f["note"], "page": "/analytics#trend-forecast",
+    }
+
+
+def tool_time_pattern(cache, district=None, crime_type=None, **_):
+    """When FIRs happen: hour x weekday peaks, with a test of whether the pattern beats chance."""
+    import temporal as TM
+    _bound(TM, cache)
+    idx = _index(cache)
+    d = (detect_district(district, idx) if (district and idx is not None) else None) or district
+    ct = (detect_crime(crime_type, idx) if (crime_type and idx is not None) else None) or crime_type
+    body, status = TM.temporal(d, ct)
+    if status != 200:
+        return {"error": body.get("error")}
+    return {k: body[k] for k in ("filters", "firs", "peak_cell", "peak_window", "busiest_weekday", "busiest_hour",
+                                 "hot_cells", "note")} | {
+        "pattern_beyond_chance": any(t.get("pattern") for t in body["tests"].values() if t),
+        "page": "/overview#time-pattern"}
+
+
 # Tools that read one specific record; an answer built from them outranks a generic one.
+TIME_CUES = ("what time", "which time", "what hour", "which hour", "time of day", "times of day", "peak hour",
+             "busiest hour", "busiest time", "busiest day", "which day", "what day of", "day of the week",
+             "when do ", "when does ", "at night or", "hour of day", "weekday", "weekend")
+ANNUAL_CUES = ("next year", "annual forecast", "yearly forecast", "forecast for 20", "prediction for 20",
+               "crimes in 2027", "crimes in 2028", "trend forecast")
+
+def is_analytic_question(text):
+    """A when/forecast question about a crime type answers with numbers, never a case list."""
+    low = " " + (text or "").lower() + " "
+    if any(c in low for c in TIME_CUES) or any(c in low for c in ANNUAL_CUES):
+        return True
+    if re.search(r"\b(link|links|alliance|syndicate|gang|model|accura\w*|recidiv\w*)\b", low):
+        return False
+    return bool(re.search(r"\b(forecast|predict(ed|ion)?|projection|projected)\b", low))
+
+
 ENTITY_TOOLS = {"get_case", "get_person", "get_officer", "network", "search_registry", "sightings"}
 
 NAV_ACTIONS = {"open_case", "open_suspect", "show_heatmap", "show_network", "show_dispatch",
@@ -1547,6 +1639,15 @@ TOOLS = {
                   {"district": {"type": "string"}}, []),
     "sightings": (tool_sightings, "Live CCTV & ANPR network: where a registered person was last seen (face-match sightings, last 24h), reads of a number plate against the stolen-vehicle registry, or the current alert queue for a district.",
                   {"person_ref": {"type": "string"}, "plate": {"type": "string"}, "district": {"type": "string"}}, []),
+    "news": (tool_news, "Live News: recent PUBLIC news headlines about policing and public safety in Karnataka (GDELT and Google News, plus NewsAPI/GNews when configured), tagged by category, district and crime type, with IntelHub's own FIR counts for the district/crime asked about. Use for 'latest news in Bengaluru', 'what's in the news about cyber fraud', 'any headlines on protests in Belagavi'. Headlines are public reporting, not verified by KSP and not records — never treat one as evidence about a case or person.",
+             {"district": {"type": "string"}, "crime_type": {"type": "string"},
+              "topic": {"type": "string", "description": "crime | cybercrime | narcotics | traffic | women_child | law_order | policing | courts"},
+              "query": {"type": "string", "description": "words that must all appear in the headline or summary"},
+              "lang": {"type": "string", "enum": ["en", "kn"]}, "limit": {"type": "integer"}}, []),
+    "annual_forecast": (tool_annual_forecast, "Annual FIR forecast for a district or statewide for a year (default next year), optionally one crime type: point, 80% range, change vs last year, the trend used, and the model's backtested accuracy against 'same as last year'. A year already in the data is answered as a backtest (predicted from earlier years only, with the actual). Use for 'how many crimes next year in Belagavi', 'forecast chain snatching 2027'.",
+                        {"district": {"type": "string"}, "crime_type": {"type": "string"}, "year": {"type": "integer"}}, []),
+    "time_pattern": (tool_time_pattern, "When FIRs happen: hour-of-day x day-of-week counts for a district/crime type, the busiest cell, day, hour and 3-hour window, and whether the pattern is beyond chance (chi-square, Holm-corrected). Use for 'what time do chain snatchings happen', 'busiest day for burglary in Mysuru'.",
+                     {"district": {"type": "string"}, "crime_type": {"type": "string"}}, []),
     "navigate": (None, "Move the officer's screen. Call at most once, only when showing a screen helps (e.g. after answering about a case, open it).",
                  {"action": {"type": "string", "enum": sorted(NAV_ACTIONS)},
                   "case_id": {"type": "string"}, "suspect_id": {"type": "string"}, "district": {"type": "string"},
@@ -1648,6 +1749,30 @@ SIGHT_CUES = ("last seen", "spotted", "sighting", "seen at", "seen in", "seen ne
 SITUATION_CUES = ("going on", "happening", "situation", "what's up", "whats up", "update", "brief me", "briefing",
                   "news", "right now", " rn", "currently", "today", "this week", "status of crime", "state of",
                   "how is", "how's", "overview", "summary", "pulse", "latest in", "what is new", "what's new")
+# Questions about the papers rather than the records. Checked before SITUATION_CUES, which
+# also lists "news": that cue reads our FIRs, and "latest news in Bengaluru" deserves the
+# headlines — with our own counts beside them, which the news tool attaches.
+NEWS_CUE = re.compile(r"\bnews\b|\bheadlines?\b|\bmedia reports?\b|\bin the media\b|\bpress reports?\b|"
+                      r"\bnewspapers?\b|\bin the papers\b|ಸುದ್ದಿ")
+NEWS_STOPWORDS = {"the", "a", "an", "any", "latest", "recent", "today", "todays", "in", "karnataka", "police",
+                  "news", "on", "about", "of", "is", "are", "there", "what", "whats"}
+
+
+def _news_args(text, low, filters):
+    """Arguments for the news tool from a question already resolved to filters."""
+    import news
+    args = {k: v for k, v in (("district", filters.get("district")), ("crime_type", filters.get("crime_type"))) if v}
+    topic = next((c for c in news.classify(low) if c not in ("crime", "policing")), None)
+    if topic and news.CRIME_CATEGORY.get(args.get("crime_type")) != topic:
+        args["topic"] = topic
+    m = re.search(r"\b(?:news|headlines?|reports?)\s+(?:about|on|regarding|of|related to)\s+(.+)", low)
+    if m and not args:
+        words = [w for w in re.sub(r"[^\w\s-]", " ", m.group(1)).split() if w not in NEWS_STOPWORDS]
+        if words:
+            args["query"] = " ".join(words[:4])
+    if re.search(r"[\u0C80-\u0CFF]", text or ""):
+        args["lang"] = "kn"
+    return args
 
 
 def plan(text, idx, ents):
@@ -1687,6 +1812,18 @@ def plan(text, idx, ents):
         filters["police_station"] = ents["station"]
     if _cue(low, ("death", "fatal", "killed", "died")):
         filters["has_fatalities"] = True
+
+    if NEWS_CUE.search(low) and not copilot_knowledge.is_platform_question(text):
+        return [("news", _news_args(text, low, filters))]
+    if _cue(low, TIME_CUES) or (" when " in f" {low} " and re.search(r"\bhappen|\boccur|\bcommit", low)):
+        return [("time_pattern", {"district": filters.get("district"), "crime_type": filters.get("crime_type")})]
+    if _cue(low, ANNUAL_CUES) or (re.search(r"\b(forecast|predict(ed|ion)?|projection|projected)\b", low) and
+                                  (re.search(r"\b20[2-3]\d\b|next year|this year|annual|per year|a year", low)
+                                   or not _cue(low, ("week", "month", "hotspot", "risk", "recidiv", "repeat",
+                                                     "link", "alliance", "syndicate", "gang", "model", "accura")))):
+        yr = re.search(r"\b(20[2-3]\d)\b", low)
+        return [("annual_forecast", {"district": filters.get("district"), "crime_type": filters.get("crime_type"),
+                                     "year": int(yr.group(1)) if yr else None})]
 
     definitional = not filters and not _cue(low, ("situation", "status", "rate", "level", "how many", "count",
                                                   "number", "trend", "list", "which", "top"))
@@ -2297,6 +2434,83 @@ def _say_sightings(r):
     return "\n".join(lines)
 
 
+def _say_news(r):
+    if r.get("error"):
+        return r["error"]
+    scope = r.get("scope") or "Karnataka"
+    about = " · ".join(x for x in (r.get("topic"), None if r.get("topic") else r.get("crime_type"),
+                                   f"“{r['query']}”" if r.get("query") else None) if x)
+    scope_txt = f"{scope} ({about})" if about else scope
+    heads = r.get("headlines") or []
+    down = [f"{s['source']}: {s['error']}" for s in r.get("sources") or []
+            if s.get("configured") and not s.get("ok") and s.get("error")]
+    if not heads and r.get("status") == "disabled":
+        return ("**Live News is switched off on this deployment** (NEWS_FETCH=off), so there are no public "
+                "headlines to read. Your IntelHub records are unaffected.")
+    if not heads and r.get("status") == "unreachable":
+        return ("**I couldn't reach the public news feeds just now**" + (f" — {'; '.join(down[:3])}" if down else "")
+                + ". The Live News page retries on its own; your IntelHub records are unaffected.")
+    if heads:
+        n = r.get("total_matching") or len(heads)
+        lines = [f"**{n} recent public headline{'s' if n != 1 else ''} on {scope_txt}**"
+                 + (" — some feeds are unreachable, so part of this is the last good fetch" if r.get("stale") else "")
+                 + ":"]
+        lines += [f"- {h['title']} — {h['source']}, {h['when']} · {h['category']}" for h in heads[:5]]
+    else:
+        lines = [f"**No public headlines on {scope_txt} in the last 7 days.**"]
+        lines += [f"- Latest statewide: {h['title']} — {h['source']}, {h['when']}" for h in r.get("latest_statewide") or []]
+    rec = r.get("records")
+    if rec:
+        what = f"{rec['crime_type']} FIRs" if rec.get("crime_type") else "FIRs"
+        where = f"in {rec['district']}" if rec.get("district") else "statewide"
+        lines.append(f"- IntelHub records: **{_fmt_int(rec['cases_30d'])} {what} {where}** in the 30 days to "
+                     f"{rec['as_of']} ({_fmt_int(rec['cases_total'])} in all).")
+    lines.append("Headlines come from public sources and are not verified by KSP — open Live News for the links.")
+    return "\n".join(lines)
+
+
+def _say_annual(r):
+    if r.get("error"):
+        return r["error"]
+    iv = r.get("interval_80") or {}
+    what = r["crime_type"]
+    lines = []
+    if r["kind"] == "backtest":
+        lines.append(f"**{r['unit']} {r['year']} — backtest, {what}:** the model, using only earlier years, would "
+                     f"have predicted **{r['predicted']:,}** (80% range {iv.get('low', 0):,}–{iv.get('high', 0):,}); "
+                     f"the corpus recorded **{r['actual']:,}** — {'inside' if r['inside_interval'] else 'outside'} the range.")
+    else:
+        ch = r.get("change_vs_last_pct")
+        lines.append(f"**{r['unit']} {r['year']} forecast, {what}: {r['predicted']:,} FIRs** "
+                     f"(80% range {iv.get('low', 0):,}–{iv.get('high', 0):,}), "
+                     f"{'+' if (ch or 0) > 0 else ''}{ch}% vs {r['last_year']} ({r['last_count']:,})"
+                     + ("" if r.get("change_exceeds_noise_band") else " — within normal year-to-year noise") + ".")
+    lines.append(r["explanation"])
+    if r.get("top_crime_types"):
+        lines.append("By crime type: " + "; ".join(f"{t['crime_type']} {t['predicted']}" for t in r["top_crime_types"]) + ".")
+    b = r.get("backtest") or {}
+    if b.get("skill_vs_last_year") is not None:
+        lines.append(f"Backtested next-year error ±{b['mae']} FIRs per district — {round(100 * b['skill_vs_last_year'])}% "
+                     f"more accurate than 'same as last year' (vs best baseline: {b.get('verdict_vs_best_baseline')}).")
+    lines.append(r["note"])
+    return "\n".join(lines)
+
+
+def _say_time(r):
+    if r.get("error"):
+        return r["error"]
+    f = r.get("filters") or {}
+    scope = " · ".join(x for x in (f.get("district"), f.get("crime_type")) if x) or "statewide, all crime types"
+    pc, pw = r.get("peak_cell") or {}, r.get("peak_window") or {}
+    lines = [f"**When FIRs happen ({scope}, {r['firs']:,} FIRs):** busiest day {r.get('busiest_weekday')}, "
+             f"busiest hour {r.get('busiest_hour')}, busiest 3-hour window {pw.get('label')} ({pw.get('count')} FIRs); "
+             f"single busiest slot {pc.get('label')} ({pc.get('count')} vs {pc.get('expected')} for an even spread)."]
+    if r.get("hot_cells"):
+        lines.append("Hot beyond chance: " + ", ".join(c["label"] for c in r["hot_cells"][:5]) + ".")
+    lines.append(r["note"])
+    return "\n".join(lines)
+
+
 def compose(calls_and_results):
     parts = []
     for (name, args), res in calls_and_results:
@@ -2305,6 +2519,15 @@ def compose(calls_and_results):
             continue
         if name == "sightings":
             parts.append(_say_sightings(res))
+            continue
+        if name == "news":
+            parts.append(_say_news(res))
+            continue
+        if name == "annual_forecast":
+            parts.append(_say_annual(res))
+            continue
+        if name == "time_pattern":
+            parts.append(_say_time(res))
             continue
         if name == "get_case":
             parts.append(_say_case(res))
@@ -2425,7 +2648,8 @@ def _trace(name, args, res):
              "insight": "Read analytics", "model_info": "Read model registry",
              "project_knowledge": "Read platform docs", "describe_platform": "Inspected live system",
              "situation": "Read live situation", "sightings": "Checked CCTV / ANPR network",
-             "navigate": "Moved screen"}.get(name, name)
+             "news": "Read public headlines", "annual_forecast": "Forecast the year",
+             "time_pattern": "Read the hour-by-weekday pattern", "navigate": "Moved screen"}.get(name, name)
     detail = ", ".join(f"{v}" for k, v in (args or {}).items() if v not in (None, "", False) and k not in ("limit", "sort_by", "order"))
     n = None
     if isinstance(res, dict):

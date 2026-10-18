@@ -45,6 +45,11 @@ copyFileSync("client-package.json", `${OUT}/client-package.json`);
 // The extension test is what stops a redirect loop. `/app/cases/` has no
 // extension so it resolves to `/app/cases/index.html`; that URL does have one, so
 // if it is ever missing too, this page reports it instead of redirecting again.
+//
+// The "Return" link targets the root, which is now the sign-in page rather than
+// the dashboard (that moved to /overview). That is still the right destination:
+// the sign-in page forwards a visitor who already holds a valid token straight on
+// to /overview, and offers everyone else the way in.
 const resolver = `<!doctype html>
 <html lang="en">
 <head>

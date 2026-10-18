@@ -131,7 +131,12 @@ async function poll() {
     }
     lastTs = Math.max(lastTs, ...(state.alerts.map((a) => a.ts)), d.now ? d.now - 1 : 0);
   } catch (e) {
-    if (e instanceof ApiError && e.isForbidden) set({ locked: true });
+    // Signed out (or a role without CCTV access): the previous officer's named
+    // matches must not stay on screen.
+    if (e instanceof ApiError && e.isForbidden) {
+      lastTs = 0;
+      set({ locked: true, alerts: [], fresh: [] });
+    }
   }
 }
 

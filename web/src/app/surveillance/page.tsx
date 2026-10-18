@@ -7,17 +7,23 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Cctv, ScanFace, Car, Radar, ShieldCheck, ShieldX, AlertTriangle, Maximize2, X, Search, Eye, MapPinned,
-  ListPlus, Trash2, Activity, Lock, Settings2, CheckCircle2, ArrowUpRight, Footprints, Gauge, EyeOff,
+  ListPlus, Trash2, Activity, Lock, CheckCircle2, ArrowUpRight, Footprints, Gauge, EyeOff, Radio,
 } from "lucide-react";
 import { apiFetch, getJSON, ApiError } from "@/lib/api";
+import { useIdentity } from "@/lib/session";
 import { useAlerts, patchAlert, refreshAlerts, ago, istTime, useNow, type SurvAlert } from "@/lib/alerts";
 import CameraFeed, { Face, type Detection, type FeedCamera } from "@/components/CameraFeed";
 import { CLIPS, assignClips, type Clip } from "@/lib/footage";
+import {
+  KIND_LABEL, StreamSaveError, removeStream, saveStream, useStreams,
+  type FeedState, type LiveSource, type StreamKind, type StreamsView,
+} from "@/lib/streams";
 
 type Cam = FeedCamera & { matches_last_hour?: number; owner?: string; uptime_pct?: number; landmark?: boolean; quality?: number };
 
 const TABS = [
   { id: "all", label: "All feeds" },
+  { id: "live", label: "Live only" },
   { id: "online", label: "Online only" },
   { id: "FACE", label: "Face AI" },
   { id: "ANPR", label: "ANPR readers" },
@@ -25,12 +31,17 @@ const TABS = [
   { id: "alerts", label: "With alerts" },
 ];
 
-const STREAMS_KEY = "ksp.cctv.streams";
-function readStreams(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(STREAMS_KEY) || "{}"); } catch { return {}; }
-}
-function writeStreams(v: Record<string, string>) {
-  try { localStorage.setItem(STREAMS_KEY, JSON.stringify(v)); } catch {}
+/** The tile footer's word for what the feed is showing, from the tile's own report. */
+function feedChip(src: LiveSource | undefined, s: FeedState | undefined) {
+  if (!src) return { text: "Recorded clip", cls: "bg-black/[0.05] text-muted" };
+  const kind = KIND_LABEL[src.kind];
+  if (s === "live") return { text: `Live · ${kind}`, cls: "bg-crimson/10 text-crimson" };
+  if (s === "down") return { text: `${kind} down · recorded shown`, cls: "bg-[#f08a24]/15 text-[#b45f0a]" };
+  if (s === "not-live") return { text: `${kind} · not live`, cls: "bg-[#f08a24]/15 text-[#b45f0a]" };
+  if (s === "awaiting-start") return { text: "Device camera · not started", cls: "bg-black/[0.05] text-muted" };
+  if (s === "unverified") return { text: `${kind} · status unknown`, cls: "bg-black/[0.05] text-muted" };
+  if (s === "stalled") return { text: `${kind} · buffering`, cls: "bg-[#f08a24]/15 text-[#b45f0a]" };
+  return { text: `${kind} · connecting`, cls: "bg-black/[0.05] text-muted" };
 }
 
 const typeBadge = (t: string) =>
@@ -71,10 +82,24 @@ function SurveillanceInner() {
   const [railP, setRailP] = useState<"all" | "P1" | "P2">("all");
   const [railS, setRailS] = useState<"new" | "all">("new");
   const [tracking, setTracking] = useState(true);
-  const [streams, setStreams] = useState<Record<string, string>>({});
   const [feedLocked, setFeedLocked] = useState(false);
+  const live = useStreams();
+  const streams = live.streams;
+  // What each wall tile reports it is actually showing. Off-screen tiles report
+  // "paused", so "receiving frames" counts only what is really playing right now.
+  const [feedStates, setFeedStates] = useState<Record<string, FeedState>>({});
+  const onFeedStatus = useCallback((id: string, s: FeedState | null) => {
+    setFeedStates((m) => {
+      if (s === null) {
+        if (!(id in m)) return m;
+        const next = { ...m };
+        delete next[id];
+        return next;
+      }
+      return m[id] === s ? m : { ...m, [id]: s };
+    });
+  }, []);
 
-  useEffect(() => setStreams(readStreams()), []);
   useEffect(() => {
     getJSON("/surveillance/cameras").then((d) => { setCams(d.cameras || []); setSummary(d.summary); }).catch(() => {});
     getJSON("/surveillance/model").then(setModel).catch(() => {});
@@ -138,12 +163,13 @@ function SurveillanceInner() {
     const s = q.trim().toLowerCase();
     return cams
       .filter((c) => !district || c.district === district)
-      .filter((c) => tab === "all" || (tab === "online" ? c.status === "online" : tab === "alerts" ? alertCams.has(c.camera_id) || latestByCam[c.camera_id] : c.type === tab))
+      .filter((c) => tab === "all" || (tab === "live" ? !!streams[c.camera_id] : tab === "online" ? c.status === "online" : tab === "alerts" ? alertCams.has(c.camera_id) || latestByCam[c.camera_id] : c.type === tab))
       .filter((c) => !s || c.name.toLowerCase().includes(s) || c.area.toLowerCase().includes(s) || c.camera_id.toLowerCase().includes(s))
+      // A real live picture leads the wall: it is the one thing on it that is happening now.
       .sort((a, b) =>
-        (latestByCam[b.camera_id] ? 2 : 0) + (b.landmark ? 1 : 0) + (b.status === "online" ? 0.5 : 0) -
-        ((latestByCam[a.camera_id] ? 2 : 0) + (a.landmark ? 1 : 0) + (a.status === "online" ? 0.5 : 0)));
-  }, [cams, district, tab, q, alertCams, latestByCam]);
+        (streams[b.camera_id] ? 3 : 0) + (latestByCam[b.camera_id] ? 2 : 0) + (b.landmark ? 1 : 0) + (b.status === "online" ? 0.5 : 0) -
+        ((streams[a.camera_id] ? 3 : 0) + (latestByCam[a.camera_id] ? 2 : 0) + (a.landmark ? 1 : 0) + (a.status === "online" ? 0.5 : 0)));
+  }, [cams, district, tab, q, alertCams, latestByCam, streams]);
 
   const rail = useMemo(() => alerts
     .filter((a) => !district || a.district === district)
@@ -161,13 +187,6 @@ function SurveillanceInner() {
   const reviewCam = review ? cams.find((c) => c.camera_id === review.camera_id) : undefined;
   const p1New = alerts.filter((a) => a.priority === "P1" && a.status === "new" && (!district || a.district === district)).length;
   const ev = model?.evaluation?.face;
-
-  const setStream = (id: string, url: string) => {
-    const s = { ...streams };
-    if (url) s[id] = url; else delete s[id];
-    setStreams(s);
-    writeStreams(s);
-  };
 
   return (
     <div className="space-y-5">
@@ -207,7 +226,7 @@ function SurveillanceInner() {
         <div className="flex items-center gap-3 rounded-2xl border border-brand/30 bg-brand/[0.06] px-4 py-3 text-[13px] text-ink">
           <Lock className="h-4 w-4 text-brand" />
           Camera positions are public. Face and plate matches name people, so they need an investigator sign-in.
-          <Link href="/access" className="ml-auto font-semibold text-brand">Sign in →</Link>
+          <Link href="/?next=%2Fsurveillance" className="ml-auto font-semibold text-brand">Sign in →</Link>
         </div>
       )}
 
@@ -231,6 +250,9 @@ function SurveillanceInner() {
         ))}
       </div>
 
+      <LiveSummary live={live} cams={cams} district={district} feedStates={feedStates}
+                   active={tab === "live"} onShow={() => { setTab("live"); setShown(12); }} />
+
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
         {/* ----------------------------------------------------------- wall */}
         <section>
@@ -251,21 +273,37 @@ function SurveillanceInner() {
             <span className="text-[12px] text-faint">Showing {Math.min(shown, filtered.length)} of {filtered.length} streams</span>
           </div>
 
+          {tab === "live" && filtered.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-black/15 bg-white px-5 py-8 text-center text-[13px] text-muted">
+              {live.locked
+                ? <>Live sources are shown to investigators and above, because a live stream can show people. <Link href="/?next=%2Fsurveillance" className="font-semibold text-brand">Sign in →</Link></>
+                : live.status === "error" ? "Live sources could not be loaded. Every tile is showing its recorded clip."
+                : live.status !== "ready" ? "Loading live sources…"
+                : live.data?.count
+                  ? <>No camera {district ? <>in <b className="text-ink">{district}</b> </> : null}has a live source{q ? " matching the search" : ""}. {district ? <button onClick={() => setDistrict("")} className="font-semibold text-brand">Show all Karnataka →</button> : null}</>
+                  : <>No camera has a live source attached yet, so every tile is a recorded clip. {live.canEdit ? "Open any camera and use Live source to attach one." : "A supervisor can attach one from a camera's dialog."}</>}
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
             {filtered.slice(0, shown).map((c) => {
               const dets = (latestByCam[c.camera_id] || []).map((e) => detectionFor(e, () => setReview(e)));
               const hot = (latestByCam[c.camera_id] || [])[0];
+              const src = streams[c.camera_id];
+              const chip = feedChip(src, feedStates[c.camera_id]);
               return (
                 <motion.article key={c.camera_id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                                 className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow hover:shadow-lg ${hot?.priority === "P1" ? "border-crimson/50 ring-2 ring-crimson/20" : "border-black/10"}`}>
-                  <CameraFeed cam={c} clip={footage[c.camera_id]} detections={dets} streamUrl={streams[c.camera_id]} />
+                  <CameraFeed cam={c} clip={footage[c.camera_id]} detections={dets} live={src} onStatus={onFeedStatus} />
                   <div className="p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h3 className="truncate text-[14px] font-bold text-ink">{c.name}</h3>
                         <p className="truncate text-[12px] text-muted">{c.area}, {c.district}</p>
                       </div>
-                      <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${typeBadge(c.type)}`}>{typeName(c.type)}</span>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${typeBadge(c.type)}`}>{typeName(c.type)}</span>
+                        <span title={src?.label || undefined} className={`max-w-[160px] truncate rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${chip.cls}`}>{chip.text}</span>
+                      </div>
                     </div>
                     <div className="mt-2.5 flex items-center gap-2">
                       <button disabled={!hot} onClick={() => hot && setReview(hot)}
@@ -338,7 +376,7 @@ function SurveillanceInner() {
         {review && <ReviewModal key={review.event_id} a={review} cam={reviewCam} clip={reviewCam && footage[reviewCam.camera_id]}
                                 onClose={() => { setReview(null); if (params.get("alert")) router.replace("/surveillance"); }} />}
         {camOpen && (
-          <CameraModal key={camOpen.camera_id} cam={camOpen} clip={footage[camOpen.camera_id]} stream={streams[camOpen.camera_id]} onStream={(u) => setStream(camOpen.camera_id, u)}
+          <CameraModal key={camOpen.camera_id} cam={camOpen} clip={footage[camOpen.camera_id]} live={streams[camOpen.camera_id]} streams={live}
                        detections={(latestByCam[camOpen.camera_id] || []).map((e) => detectionFor(e, () => setReview(e)))}
                        onReview={setReview} onClose={() => { setCamOpen(null); if (params.get("camera")) router.replace("/surveillance"); }} />
         )}
@@ -398,6 +436,11 @@ function Modal({ children, onClose, wide }: { children: React.ReactNode; onClose
 function ReviewModal({ a: initial, cam, clip, onClose }: { a: any; cam?: Cam; clip?: Clip; onClose: () => void }) {
   const [a, setA] = useState(initial);
   const [note, setNote] = useState("");
+  // Buttons follow the permissions the server enforces (it re-checks every action).
+  const perms = useIdentity().identity?.permissions ?? [];
+  const canDecide = perms.includes("surveillance_decide");
+  const canEscalate = perms.includes("surveillance_escalate");
+  const noRight = "Your role cannot take this action";
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [trail, setTrail] = useState<any[]>([]);
@@ -534,9 +577,9 @@ function ReviewModal({ a: initial, cam, clip, onClose }: { a: any; cam?: Cam; cl
                     className="w-full resize-none rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-[13px] focus:border-brand/40 focus:outline-none" />
           {err && <p className="mt-1 text-[12px] text-crimson">{err}</p>}
           <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            <button disabled={busy} onClick={() => decide("verify")} className="flex items-center gap-1.5 rounded-xl bg-emerald px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-50"><ShieldCheck className="h-4 w-4" /> Verify match</button>
-            <button disabled={busy} onClick={() => decide("reject")} className="flex items-center gap-1.5 rounded-xl bg-ink px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-50"><ShieldX className="h-4 w-4" /> Reject — not them</button>
-            <button disabled={busy} onClick={() => decide("escalate")} className="flex items-center gap-1.5 rounded-xl border border-black/10 px-3.5 py-2 text-[13px] font-semibold disabled:opacity-50"><ArrowUpRight className="h-4 w-4" /> Escalate to supervisor</button>
+            <button disabled={busy || !canDecide} title={canDecide ? undefined : noRight} onClick={() => decide("verify")} className="flex items-center gap-1.5 rounded-xl bg-emerald px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-50"><ShieldCheck className="h-4 w-4" /> Verify match</button>
+            <button disabled={busy || !canDecide} title={canDecide ? undefined : noRight} onClick={() => decide("reject")} className="flex items-center gap-1.5 rounded-xl bg-ink px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-50"><ShieldX className="h-4 w-4" /> Reject — not them</button>
+            <button disabled={busy || !canEscalate} title={canEscalate ? undefined : noRight} onClick={() => decide("escalate")} className="flex items-center gap-1.5 rounded-xl border border-black/10 px-3.5 py-2 text-[13px] font-semibold disabled:opacity-50"><ArrowUpRight className="h-4 w-4" /> Escalate up the chain</button>
             <button disabled={busy} onClick={() => decide("acknowledge")} className="rounded-xl border border-black/10 px-3.5 py-2 text-[13px] font-semibold disabled:opacity-50">Acknowledge</button>
             <span className="flex-1" />
             {face && <Link href={`/suspect?id=${a.face_match.suspect_id}`} className="flex items-center gap-1 text-[12.5px] font-semibold text-brand"><Eye className="h-4 w-4" /> Dossier</Link>}
@@ -549,19 +592,36 @@ function ReviewModal({ a: initial, cam, clip, onClose }: { a: any; cam?: Cam; cl
   );
 }
 
-function CameraModal({ cam, clip, detections, stream, onStream, onReview, onClose }:
-  { cam: Cam; clip?: Clip; detections: Detection[]; stream?: string; onStream: (u: string) => void; onReview: (e: any) => void; onClose: () => void }) {
+function CameraModal({ cam, clip, detections, live, streams, onReview, onClose }:
+  { cam: Cam; clip?: Clip; detections: Detection[]; live?: LiveSource; streams: StreamsView; onReview: (e: any) => void; onClose: () => void }) {
   const [detail, setDetail] = useState<any>(null);
-  const [url, setUrl] = useState(stream || "");
-  const [showCfg, setShowCfg] = useState(false);
+  // What the large feed is actually showing, so the caption under it describes that
+  // picture: the live source's credit while it plays, the clip's when it fell back.
+  const [feed, setFeed] = useState<FeedState | null>(null);
+  const onStatus = useCallback((_id: string, s: FeedState | null) => setFeed(s), []);
   const now = useNow();
   useEffect(() => {
     getJSON(`/surveillance/camera/${cam.camera_id}`).then(setDetail).catch(() => {});
   }, [cam.camera_id]);
+  const showingClip = !live || feed === "down";
   return (
     <Modal onClose={onClose} wide>
-      <CameraFeed cam={cam} clip={clip} detections={detections} streamUrl={stream} large />
-      {clip && !stream && cam.status !== "offline" && (
+      <CameraFeed cam={cam} clip={clip} detections={detections} live={live} onStatus={onStatus} large />
+      {live && !showingClip && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-black/[0.06] bg-black/[0.02] px-6 py-2 text-[11.5px] text-muted">
+          <span><b className="text-ink">Live source:</b> {live.label ? `${live.label} · ` : ""}{KIND_LABEL[live.kind]}
+            {live.origin === "deployment" ? " · set by the deployment" : live.added_by ? ` · attached by ${live.added_by}` : ""}</span>
+          {live.kind === "device"
+            ? <span className="font-semibold text-ink">This is the camera of the device you are using, not the CCTV camera at {cam.name}.</span>
+            : <span><b className="text-ink">Boxes:</b> none — no detector runs on a live picture</span>}
+          {live.attribution && <span><b className="text-ink">Credit:</b> {live.attribution}</span>}
+          {live.kind === "youtube" && live.url && (
+            <a href={live.url} target="_blank" rel="noreferrer" className="font-semibold text-brand hover:underline">Open on YouTube</a>
+          )}
+          <span>Matcher alerts for this camera come from the simulated sighting stream, not from this picture.</span>
+        </div>
+      )}
+      {clip && showingClip && (cam.status !== "offline" || live) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-black/[0.06] bg-black/[0.02] px-6 py-2 text-[11.5px] text-muted">
           <span><b className="text-ink">Footage:</b> {clip.place}, Bengaluru — recorded {clip.light === "night" ? "at night" : clip.light === "dusk" ? "at dusk" : "by day"}</span>
           <span><b className="text-ink">Boxes:</b> YOLO11s object detection + ByteTrack, run on this footage</span>
@@ -587,18 +647,8 @@ function CameraModal({ cam, clip, detections, stream, onStream, onReview, onClos
           </dl>
           <div className="mt-4 flex gap-2">
             <Link href={`/map?mode=3d&camera=${cam.camera_id}`} onClick={onClose} className="flex items-center gap-1.5 rounded-xl bg-black/[0.05] px-3 py-2 text-[12.5px] font-semibold"><MapPinned className="h-4 w-4" /> On the map</Link>
-            <button onClick={() => setShowCfg((s) => !s)} className="flex items-center gap-1.5 rounded-xl bg-black/[0.05] px-3 py-2 text-[12.5px] font-semibold"><Settings2 className="h-4 w-4" /> Feed source</button>
           </div>
-          {showCfg && (
-            <div className="mt-3 rounded-xl border border-black/10 p-3 text-[12px]">
-              <p className="text-muted">Play a real stream for this camera (MP4, or HLS on Safari). Stored in this browser only.</p>
-              <div className="mt-2 flex gap-2">
-                <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…/stream.mp4" className="min-w-0 flex-1 rounded-lg border border-black/10 px-2 py-1.5" />
-                <button onClick={() => onStream(url.trim())} className="rounded-lg bg-ink px-3 font-semibold text-white">Save</button>
-                {stream && <button onClick={() => { setUrl(""); onStream(""); }} className="rounded-lg border border-black/10 px-2">Reset</button>}
-              </div>
-            </div>
-          )}
+          <LiveSourcePanel cam={cam} live={live} streams={streams} />
         </div>
         <div>
           <h3 className="text-[13px] font-bold text-ink">Registry matches at this camera (6h)</h3>
@@ -617,16 +667,221 @@ function CameraModal({ cam, clip, detections, stream, onStream, onReview, onClos
   );
 }
 
+// ===================================================================== live sources
+/** How many cameras have a live source, and how many of the tiles on screen are
+ *  actually receiving frames - two different numbers, both shown. */
+function LiveSummary({ live, cams, district, feedStates, active, onShow }:
+  { live: StreamsView; cams: Cam[]; district: string; feedStates: Record<string, FeedState>; active: boolean; onShow: () => void }) {
+  const ids = Object.keys(live.streams);
+  const districtOf = useMemo(() => new Map(cams.map((c) => [c.camera_id, c.district])), [cams]);
+  const here = district ? ids.filter((id) => districtOf.get(id) === district).length : ids.length;
+  const states = Object.values(feedStates);
+  const receiving = states.filter((s) => s === "live").length;
+  const down = states.filter((s) => s === "down").length;
+  let body: React.ReactNode;
+  if (live.locked)
+    body = <>Sign in as an investigator to see which cameras have a live stream attached. Until then every tile plays its recorded clip, badged RECORDED.</>;
+  else if (live.status === "error") body = "Live sources could not be loaded, so every tile is playing its recorded clip.";
+  else if (live.status !== "ready") body = "Checking for live sources…";
+  else if (!ids.length)
+    body = <>None attached: every tile is a recorded Bengaluru street clip, badged RECORDED. {live.canEdit
+      ? "Attach an NVR (HLS), WebRTC (WHEP), MJPEG or YouTube Live stream from any camera's dialog."
+      : "A supervisor can attach a real stream from a camera's dialog."}</>;
+  else
+    body = <>
+      <b className="text-ink">{ids.length}</b> camera{ids.length === 1 ? "" : "s"} with a live source{district ? <> ({here} in {district})</> : null}
+      {" · "}<b className="text-ink">{receiving}</b> on screen receiving frames now
+      {down ? <>{" · "}<b className="text-[#b45f0a]">{down}</b> down, showing recorded</> : null}.
+      {" "}A tile says LIVE only while frames arrive.
+    </>;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-[12.5px] text-muted shadow-sm">
+      <span className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-faint">
+        <Radio className={`h-3.5 w-3.5 ${receiving ? "text-crimson" : "text-faint"}`} /> Live sources
+      </span>
+      <span className="min-w-0 flex-1">{body}</span>
+      {ids.length > 0 && !active && (
+        <button onClick={onShow} className="rounded-full bg-ink px-3 py-1 text-[12px] font-semibold text-white">Live only →</button>
+      )}
+    </div>
+  );
+}
+
+// Greyed hints in an empty field, never stored or played: example.in is a reserved
+// documentation domain and 192.168.x is a private address.
+const URL_HINT: Record<StreamKind, string> = {
+  hls: "https://nvr.example.in/live/cam1/index.m3u8",
+  "webrtc-whep": "https://media.example.in:8889/cam1/whep",
+  mjpeg: "http://192.168.1.64/video.mjpg",
+  mp4: "https://gateway.example.in/api/stream.mp4?src=cam1",
+  youtube: "https://www.youtube.com/watch?v=…",
+  device: "",
+};
+
+const istStamp = (iso?: string | null) =>
+  iso ? `${new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })} IST` : "";
+
+/** The camera's live source: read-only for everyone, editable by a supervisor. The
+ *  server validates and stores it; this form only relays its answer, field by field. */
+function LiveSourcePanel({ cam, live, streams }: { cam: Cam; live?: LiveSource; streams: StreamsView }) {
+  const [kind, setKind] = useState<StreamKind>(live?.kind ?? "hls");
+  const [url, setUrl] = useState(live?.url ?? "");
+  const [label, setLabel] = useState(live?.label ?? "");
+  const [attribution, setAttribution] = useState(live?.attribution ?? "");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const info = streams.kinds.find((k) => k.kind === kind);
+  const needsUrl = info ? info.needs_url : kind !== "device";
+  const mixed = needsUrl && typeof window !== "undefined" && window.location.protocol === "https:" && /^http:\/\//i.test(url.trim());
+  const history = (streams.data?.history || []).filter((h) => h.camera_id === cam.camera_id).slice(0, 3);
+  const ignored = (streams.data?.ignored || []).filter((i) => i.camera_id === cam.camera_id);
+
+  const run = async (op: () => Promise<unknown>, done: string) => {
+    setBusy(true);
+    setErrors({});
+    setMsg(null);
+    try {
+      await op();
+      setMsg({ ok: true, text: done });
+    } catch (e) {
+      if (e instanceof StreamSaveError) {
+        setErrors(e.errors);
+        const onField = ["kind", "url", "label", "attribution"].some((f) => e.errors[f]);
+        if (!onField) setMsg({ ok: false, text: e.message });
+      } else setMsg({ ok: false, text: "Could not save the change." });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = () => run(async () => {
+    const d = await saveStream(cam.camera_id, { kind, url: url.trim(), label: label.trim(), attribution: attribution.trim() });
+    const s = d.streams[cam.camera_id];
+    if (s?.url) setUrl(s.url);   // a YouTube link comes back as its canonical watch URL
+  }, "Saved. Every signed-in officer's wall now plays this source.");
+  const remove = () => run(async () => {
+    await removeStream(cam.camera_id);
+    setUrl("");
+    setLabel("");
+    setAttribution("");
+  }, "Removed. This camera shows its recorded clip again.");
+
+  const field = "mt-1 w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[12.5px] focus:border-brand/40 focus:outline-none";
+  const cap = "text-[10.5px] font-semibold uppercase tracking-[0.12em] text-faint";
+
+  return (
+    <section className="mt-4 rounded-xl border border-black/10 p-3 text-[12px]">
+      <h3 className="flex items-center gap-1.5 text-[13px] font-bold text-ink"><Radio className="h-4 w-4 text-crimson" /> Live source</h3>
+      {streams.locked ? (
+        <p className="mt-1.5 text-muted">
+          Shown to investigators and above, because a live stream can show people. <Link href="/?next=%2Fsurveillance" className="font-semibold text-brand">Sign in →</Link>
+        </p>
+      ) : streams.status === "error" ? (
+        <p className="mt-1.5 text-crimson">Live sources could not be loaded.</p>
+      ) : streams.status !== "ready" ? (
+        <p className="mt-1.5 text-muted">Loading…</p>
+      ) : (
+        <>
+          {live ? (
+            <div className="mt-1.5 space-y-0.5">
+              <div className="text-ink"><b>{KIND_LABEL[live.kind]}</b>{live.label ? ` · ${live.label}` : ""}</div>
+              {live.url && <div className="truncate font-mono text-[11px] text-muted" title={live.url}>{live.url}</div>}
+              {live.attribution && <div className="text-muted">Credit: {live.attribution}</div>}
+              <div className="text-[11px] text-faint">
+                {live.origin === "deployment"
+                  ? "Set by the deployment (CAMERA_STREAMS) — change it there."
+                  : `Attached by ${live.added_by || "unknown"}${live.added_at ? ` · ${istStamp(live.added_at)}` : ""}.`}
+                {live.overrides_default ? " Overrides the deployment's source for this camera; removing it restores that one." : ""}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-muted">None attached — this camera shows a recorded clip.</p>
+          )}
+          {ignored.map((i, n) => (
+            <p key={n} className="mt-1.5 text-[11.5px] text-[#b45f0a]">A {i.origin} source for this camera is not being served: {i.reason}</p>
+          ))}
+
+          {streams.canEdit ? (
+            <div className="mt-3 space-y-2 border-t border-black/[0.06] pt-3">
+              <label className="block">
+                <span className={cap}>Kind</span>
+                <select value={kind} onChange={(e) => { setKind(e.target.value as StreamKind); setErrors({}); }} className={field}>
+                  {streams.kinds.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}
+                </select>
+                {info && <span className="mt-1 block text-[11px] leading-snug text-muted">{info.hint}</span>}
+                {errors.kind && <span className="mt-1 block text-[11.5px] text-crimson">{errors.kind}</span>}
+              </label>
+              {needsUrl && (
+                <label className="block">
+                  <span className={cap}>Stream URL</span>
+                  <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={URL_HINT[kind]} spellCheck={false} autoComplete="off"
+                         className={`${field} font-mono`} />
+                  {errors.url && <span className="mt-1 block text-[11.5px] text-crimson">{errors.url}</span>}
+                  {mixed && !errors.url && (
+                    <span className="mt-1 block text-[11px] leading-snug text-[#b45f0a]">
+                      This page is served over https, and browsers block http:// media on it. A LAN http source plays only where IntelHub itself is opened over http on that network.
+                    </span>
+                  )}
+                </label>
+              )}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block">
+                  <span className={cap}>Label</span>
+                  <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={120} placeholder="e.g. Gate 3 NVR" className={field} />
+                  {errors.label && <span className="mt-1 block text-[11.5px] text-crimson">{errors.label}</span>}
+                </label>
+                <label className="block">
+                  <span className={cap}>Attribution</span>
+                  <input value={attribution} onChange={(e) => setAttribution(e.target.value)} maxLength={200} placeholder="Who operates or owns the stream" className={field} />
+                  {errors.attribution && <span className="mt-1 block text-[11.5px] text-crimson">{errors.attribution}</span>}
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                <button disabled={busy} onClick={save} className="rounded-lg bg-ink px-3 py-1.5 text-[12.5px] font-semibold text-white disabled:opacity-50">
+                  {busy ? "Saving…" : live?.origin === "operator" ? "Save changes" : "Attach source"}
+                </button>
+                {live?.origin === "operator" && (
+                  <button disabled={busy} onClick={remove} className="rounded-lg border border-black/10 px-3 py-1.5 text-[12.5px] font-semibold text-crimson disabled:opacity-50">Remove</button>
+                )}
+              </div>
+              {msg && <p className={`text-[11.5px] ${msg.ok ? "text-emerald" : "text-crimson"}`}>{msg.text}</p>}
+              {history.length > 0 && (
+                <ul className="space-y-0.5 text-[11px] text-faint">
+                  {history.map((h, n) => (
+                    <li key={n} className="truncate" title={h.url || undefined}>
+                      {h.action === "remove" ? "Removed" : `Set ${h.kind ? KIND_LABEL[h.kind as StreamKind] || h.kind : ""}`} by {h.by} · {istStamp(h.at)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {streams.data?.storage && <p className="text-[10.5px] leading-snug text-faint">{streams.data.storage.note}</p>}
+            </div>
+          ) : (
+            <p className="mt-2 text-[11.5px] text-faint">Only a supervisor can attach or change a live source.</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function FootageNote() {
   return (
     <details className="mt-4 rounded-2xl border border-black/10 bg-white px-4 py-3 text-[12px] text-muted shadow-sm">
       <summary className="cursor-pointer font-semibold text-ink">About these feeds</summary>
       <p className="mt-2 leading-relaxed">
-        Each feed plays real street footage recorded in Bengaluru in 2024–25 and published on Wikimedia Commons, standing in
-        for the camera&apos;s stream; where a camera is named after a place we have footage of (Brigade Road, MG Road, Hebbal,
-        Banashankari, Shivajinagar, Mekhri Circle), it shows that place. The boxes are real detections from YOLO11s with
-        ByteTrack tracking, computed on that footage. Face and plate matches come from the matcher and are never drawn on
-        anyone in the picture — nobody filmed here is a registry person.
+        KSP&apos;s own Safe City and traffic-police feeds are not public, so a camera plays live only when a supervisor has
+        attached a live stream to it — an NVR or camera gateway&apos;s HLS or WebRTC (WHEP) output, an MJPEG camera, a
+        YouTube Live broadcast of a public place, or the viewing device&apos;s own camera. Such a tile is badged LIVE only while
+        frames are actually arriving; when the link fails it says so and falls back to its recording. No analytics run on
+        a live picture.
+      </p>
+      <p className="mt-2 leading-relaxed">
+        Every other feed is badged RECORDED and plays real street footage recorded in Bengaluru in 2024–25 and published
+        on Wikimedia Commons, standing in for the camera&apos;s stream; where a camera is named after a place we have footage
+        of (Brigade Road, MG Road, Hebbal, Banashankari, Shivajinagar, Mekhri Circle), it shows that place. The boxes are
+        real detections from YOLO11s with ByteTrack tracking, computed on that footage. Face and plate matches come from
+        the matcher and are never drawn on anyone in the picture — nobody filmed here is a registry person.
       </p>
       <ul className="mt-2 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
         {CLIPS.map((c) => (

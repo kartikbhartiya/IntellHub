@@ -23,10 +23,13 @@ import {
   HelpCircle,
   Expand,
   Shrink,
+  Users,
 } from "lucide-react";
 import { getJSON, apiFetch } from "@/lib/api";
 import { ForecastChart, ModelMetricsChart, FeatureImportanceChart } from "./analytics-charts";
 import { SocioScatter, SocioVulnerabilityBar, SocioRadarChart } from "./socio-charts";
+import OccupationChart from "@/components/OccupationChart";
+import TrendForecast from "@/components/TrendForecast";
 
 const rise = {
   hidden: { opacity: 0, y: 18, scale: 0.985 },
@@ -271,6 +274,18 @@ export default function AnalyticsPage() {
         </div>
       </Section>
 
+      {/* Annual trend forecast */}
+      <div id="trend-forecast" className="scroll-mt-28">
+        <Section
+          i={2}
+          icon={Sparkles}
+          title="Crime Trend Forecast — annual, per district"
+          sub="Partial-pooling ridge regression · backtested against 3 baselines · 80% interval · pick a past year to see it miss"
+        >
+          <TrendForecast />
+        </Section>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* DBSCAN clusters */}
         <Section i={3} icon={MapPinned} title="Crime Cluster Zones" sub="DBSCAN · haversine density clustering" tone="azure">
@@ -373,6 +388,18 @@ export default function AnalyticsPage() {
         tone="azure"
       >
         <SocioEconomic />
+      </Section>
+
+      {/* Socio-economic profile of the people on the FIRs — the person-level side of
+          the district correlation above, aggregated server-side. */}
+      <Section
+        i={7}
+        icon={Users}
+        title="Socio-Economic Profile of FIRs"
+        sub="Complainant occupation, and the age and gender of complainants, victims and accused · aggregate counts only"
+        tone="azure"
+      >
+        <OccupationChart />
       </Section>
     </div>
   );

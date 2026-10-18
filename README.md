@@ -106,6 +106,43 @@ reviewers and nowhere else:
 | `analyst` | `scrb-analyst` | analyst — aggregate only |
 | `io` | `scrb-io` | investigator — adds case and dossier access |
 | `sp` | `scrb-sp` | supervisor — full watchlist and audit log |
+| `dgp@ksp.gov.in` | `scrb-dgp` | State DGP — statewide, every permission |
+| `admin@ksp.gov.in` | `scrb-admin` | Admin — platform settings, sync, retention |
+| `sp.bengaluru@ksp.gov.in` | `scrb-sp` | District SP (Bengaluru Urban) — district cases, CCTV decisions, in-district watchlist names |
+| `dsp.mysuru@ksp.gov.in` | `scrb-dsp` | Deputy SP (Mysuru) — district cases, verify/escalate CCTV matches |
+| `sho.koramangala@ksp.gov.in` | `scrb-sho` | SHO, Koramangala PS — station cases, verify CCTV matches |
+| `si.koramangala@ksp.gov.in` | `scrb-si` | SI, Koramangala PS — station cases, acknowledge alerts |
+| `analyst@ksp.gov.in` | `scrb-analyst` | SCRB Analyst — aggregates only |
+
+The web client now opens on the **sign-in page** (`/`), with one-click demo personas;
+the command overview moved to `/overview`. Each role carries a tier, a list of
+permissions and a jurisdiction (state / district / station) inside its signed token:
+list views, Kavya's answers, CCTV alerts and FIR registration are all cut to that
+jurisdiction server-side. `GET /serverless/api/auth/roles` publishes the matrix.
+
+**New in this release**
+
+* **Register FIR** (`/fir/new`, `POST /serverless/api/fir/register`) — a four-step
+  CCTNS-schema form. Every code is checked against the master tables; Crime No. /
+  Case No. follow the corpus format (category · district · station · year · serial);
+  accused can be linked to the offender registry; registrations persist to
+  `FIR_REGISTRY_PATH` (outside `data/`, so trained models stay valid) and appear at
+  once in cases, the network graph, analytics and Kavya.
+* **Crime Trend Forecast** (Analytics) — annual FIRs per district and year from a
+  partial-pooling ridge regression, backtested against "same as last year", the
+  district mean and a per-district line, with an 80% interval whose coverage is
+  measured out of sample. Picking a past year shows the backtest.
+* **When crime happens** (Overview) — hour-of-day × day-of-week heatmap with a
+  Holm-corrected chi-square test, so an even spread is reported as one.
+* **Live News** (`/news`) — Karnataka crime headlines from GDELT and Google News
+  (plus `NEWSAPI_KEY` / `GNEWS_API_KEY` when set), tagged by district and crime type.
+* **By occupation** (Analytics) and the **case-flow Sankey** (Lifecycle).
+* **Network** rebuilt: search, filters, path finding, syndicates, 2D/3D.
+* **Live CCTV**: attach a real HLS / WebRTC (WHEP) / MJPEG / YouTube live source to
+  any camera (`CAMERA_STREAMS` or `CAMERA_STREAMS_PATH`); a tile says LIVE only when
+  frames arrive, and falls back to its recording otherwise.
+* **Kavya**: pause/resume mic, stop speaking, click outside to close; answers
+  annual forecasts and time-of-day questions.
 
 **Before any deployment holding real records**, set `AUTH_ACCOUNTS`
 (`user:scrypt$salt$key:role`, generate with `python -c "import auth;

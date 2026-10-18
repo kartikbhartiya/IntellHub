@@ -122,17 +122,37 @@ export async function askAgent(
  *  - Dossiers and registries return 403. There is no partial version of an
  *    individual's file worth rendering.
  */
-const TOKEN_KEY = "ksp.auth.token";
+export const TOKEN_KEY = "ksp.auth.token";
+
+/**
+ * Fired on `window` whenever this tab's token changes (sign-in, sign-out, a demo
+ * persona switch). The nav, the landing page and every page that reads the
+ * identity must agree on who is signed in; before this each surface fetched
+ * /auth/me on its own and they drifted apart until a reload. Other tabs learn of
+ * the change through the browser's own `storage` event on TOKEN_KEY.
+ */
+export const AUTH_EVENT = "ksp:auth-changed";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;   // storage blocked (private mode) — behave as signed out
+  }
 }
 
-export function setToken(token: string | null) {
+/** `notify: false` is for a caller that is itself reacting to an identity change
+ *  (clearing a token the server no longer honours) and must not trigger another. */
+export function setToken(token: string | null, notify = true) {
   if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  try {
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    else window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage blocked: the session simply does not persist */
+  }
+  if (notify) window.dispatchEvent(new Event(AUTH_EVENT));
 }
 
 /** An API failure that remembers its status, so callers can distinguish
@@ -184,8 +204,34 @@ export async function apiFetchRaw(path: string, init: RequestInit = {}) {
   });
 }
 
+/* ------------------------------------------------------------ roles & scope
+ * The role set grew from three tiers to a KSP rank structure (SI, SHO, DSP, SP,
+ * DGP, admin) with a jurisdiction carried in the signed token. Every field added
+ * here is optional on purpose: the UI must keep working against a backend that
+ * only knows the three legacy roles, and must never fill a gap with a guess about
+ * what a role may do. Permissions are rendered from what the API returns, never
+ * from a matrix hardcoded in the client.
+ */
+export type ScopeLevel = "state" | "district" | "station";
+
+export interface Jurisdiction {
+  level: ScopeLevel;
+  district?: string | null;
+  station?: string | null;
+}
+
+export interface IdentityCore {
+  user: string | null;
+  role: string;
+  authenticated: boolean;
+  role_label?: string;
+  tier?: number;
+  scope?: Jurisdiction;
+  permissions?: string[];
+}
+
 export interface Identity {
-  identity: { user: string | null; role: string; authenticated: boolean };
+  identity: IdentityCore;
   roles: string[];
   demo_mode: boolean;
   // Usernames and roles only — the API deliberately does not serve passwords.
@@ -195,24 +241,159 @@ export interface Identity {
   warning?: string | null;
 }
 
-export async function login(username: string, password: string) {
+export interface RoleInfo {
+  role: string;
+  label: string;
+  tier: number;
+  scope_level: ScopeLevel;
+  description: string;
+  permissions: string[];
+}
+
+export interface DemoPersona {
+  id: string;
+  label: string;
+  role: string;
+  role_label: string;
+  scope_level: ScopeLevel;
+  district: string | null;
+  station: string | null;
+  description: string;
+  /** The persona's district can be swapped for any of `DemoInfo.districts`. */
+  switchable_district: boolean;
+}
+
+export interface DemoInfo {
+  demo_mode: true;
+  districts: string[];
+  personas: DemoPersona[];
+}
+
+export interface LoginResult {
+  token: string;
+  role: string;
+  username: string;
+  expires_in?: number;
+  identity?: IdentityCore;
+}
+
+/**
+ * A refused sign-in, with the reason kept apart from the message.
+ *
+ * "Wrong password" and "this account is locked for four more minutes" need
+ * different screens: the first invites another try, the second must tell the
+ * officer to stop, or they burn the remaining attempts against a lock they cannot
+ * see. A bare `Error("Invalid credentials")` collapsed both into the first.
+ */
+export class LoginError extends ApiError {
+  code: string;
+  /** Seconds until the account may try again, on a 429. */
+  retryAfter: number | null;
+  constructor(status: number, code: string, retryAfter: number | null = null) {
+    super(status, code);
+    this.name = "LoginError";
+    this.code = code;
+    this.retryAfter = retryAfter;
+  }
+  get isLockedOut() {
+    return this.status === 429;
+  }
+}
+
+async function readLoginResponse(res: Response): Promise<LoginResult> {
+  let body: Record<string, unknown> = {};
+  try {
+    body = await res.json();
+  } catch {
+    /* an empty or HTML body — the status alone still says what happened */
+  }
+  if (!res.ok) {
+    const retry = Number(body.retry_after_seconds);
+    throw new LoginError(
+      res.status,
+      typeof body.error === "string" ? body.error : `http_${res.status}`,
+      res.status === 429 && Number.isFinite(retry) ? Math.max(0, Math.round(retry)) : null,
+    );
+  }
+  const data = body as unknown as LoginResult;
+  if (!data.token) throw new LoginError(502, "no_token");
+  setToken(data.token);
+  return data;
+}
+
+export async function login(username: string, password: string): Promise<LoginResult> {
   const res = await fetch(api("/auth/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
-  if (!res.ok) throw new Error("Invalid credentials");
-  const data = await res.json();
-  setToken(data.token);
-  return data as { token: string; role: string; username: string };
+  return readLoginResponse(res);
 }
 
+/**
+ * Discards the token in this browser.
+ *
+ * Tokens are stateless signed payloads, so there is no server session to end: a
+ * copied token stays valid until it expires (TOKEN_TTL_SECONDS, eight hours) or
+ * the signing secret is rotated. Signing out protects this device, not a token
+ * that has already leaked.
+ */
 export function logout() {
   setToken(null);
 }
 
 export async function whoami(): Promise<Identity> {
   return getJSON<Identity>("/auth/me");
+}
+
+export interface RoleCatalog {
+  roles: RoleInfo[];
+  /** Every permission the server knows, in its own order, with what it unlocks. */
+  permissions?: { permission: string; description: string }[];
+  /** What each scope level restricts, in the server's words. */
+  scope_levels?: Partial<Record<ScopeLevel, string>>;
+}
+
+/** GET /auth/roles in full: roles, the permission glossary and the scope levels. */
+export async function getRoleCatalog(): Promise<RoleCatalog> {
+  const data = await getJSON<RoleCatalog>("/auth/roles");
+  return {
+    ...data,
+    roles: Array.isArray(data.roles) ? data.roles : [],
+    permissions: Array.isArray(data.permissions) ? data.permissions : undefined,
+  };
+}
+
+/** The role catalogue with each role's permissions, as the API enforces them. */
+export async function getRoles(): Promise<RoleInfo[]> {
+  return (await getRoleCatalog()).roles;
+}
+
+/**
+ * Demo personas, or `null` when the deployment is not in demo mode.
+ *
+ * The endpoint answers 404 outside demo mode, which is the expected state of a
+ * real deployment, not a fault — so it is returned as `null` for callers to hide
+ * the persona UI, while any other failure still throws.
+ */
+export async function demoPersonas(): Promise<DemoInfo | null> {
+  try {
+    const data = await getJSON<DemoInfo>("/auth/demo");
+    return data && Array.isArray(data.personas) ? data : null;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/** Sign in as a demo persona; for a switchable one, `district` replaces its default. */
+export async function demoLogin(persona: string, district?: string | null): Promise<LoginResult> {
+  const res = await fetch(api("/auth/demo"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(district ? { persona, district } : { persona }),
+  });
+  return readLoginResponse(res);
 }
 
 

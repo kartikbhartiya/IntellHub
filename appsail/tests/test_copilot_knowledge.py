@@ -41,8 +41,10 @@ def test_every_web_page_and_api_route_is_indexed():
 
 def test_routes_carry_the_role_they_require():
     roles = {r["path"]: r["role"] for r in B.api_routes()[0]}
-    assert roles["/serverless/api/audit-log"] == "supervisor"
-    assert roles["/serverless/api/case/<case_id>"] == "investigator"
+    assert roles["/serverless/api/audit-log"].startswith("audit_read") and "supervisor" in roles["/serverless/api/audit-log"]
+    assert roles["/serverless/api/case/<case_id>"].startswith("view_cases") and "investigator" in roles["/serverless/api/case/<case_id>"]
+    # Blueprint routes are indexed too, with their own module as the source.
+    assert "/serverless/api/forecast/annual" in roles and "/serverless/api/fir/register" in roles
 
 
 @pytest.mark.parametrize("question,expected_source", [

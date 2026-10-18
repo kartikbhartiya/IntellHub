@@ -8,7 +8,11 @@
  * What it is not: the KSP Safe City feed. Nobody in these clips is a registry person,
  * so the matcher's face and plate alerts are never pinned on anyone in the picture.
  * The credits below are required by the CC BY / CC BY-SA licences and are shown in
- * the camera view. */
+ * the camera view.
+ *
+ * A camera that an administrator has attached a live stream to (lib/streams.ts) plays
+ * that instead; its clip is then only the fallback shown, under a notice, while the
+ * live link is down. Either way the tile is badged for what it is: RECORDED or LIVE. */
 
 export type Light = "day" | "dusk" | "night";
 

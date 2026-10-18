@@ -458,7 +458,9 @@ def audited(action, subject_type=None, subject_arg=None):
                        status=500, reason=reason)
                 raise
 
-            status = 200
+            # A handler may return (body, status) or a Response carrying its own
+            # status (jsonify_safe(..., status=404)); both must be recorded as sent.
+            status = getattr(response, "status_code", 200)
             if isinstance(response, tuple) and len(response) > 1:
                 try:
                     status = int(response[1])
