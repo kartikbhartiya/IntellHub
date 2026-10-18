@@ -24,6 +24,7 @@ import networkx as nx
 import audit
 import agent_answers
 import copilot_engine
+import copilot_knowledge
 _PROCESS_STARTED = time.time()
 import auth
 import grounding
@@ -120,6 +121,7 @@ LOG.info("Initializing Deep Intelligence Core...")
 # Global State
 knowledge_graph = nx.Graph()
 copilot_engine.configure(lambda: knowledge_graph)
+copilot_knowledge.configure(app)
 data_cache = {}
 models = {}
 
@@ -4398,6 +4400,9 @@ def route_sync():
     if request.method == 'OPTIONS':
         return '', 204
     success = load_and_build_intelligence(force=True)
+    # The copilot's knowledge of the platform is regenerated with the corpus, so a
+    # sync after an update makes the change visible to it without a restart.
+    copilot_knowledge.reload()
     if success:
         return jsonify_safe({"status": "success", "message": "Database synchronized successfully"})
     else:

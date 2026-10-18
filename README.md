@@ -406,6 +406,14 @@ threshold, because real geography defeats thresholds: Koppal and Hosapete
   answer costs one round trip.
 * **Works with no API key.** The same entity resolution and tools drive a deterministic engine that
   composes the answer when no provider is configured or all of them fail.
+* **Knows the platform as it is today.** `appsail/build_project_knowledge.py` indexes every
+  Markdown document, backend module docstring, API route (with the role it requires) and web page
+  into `appsail/artifacts/project_knowledge.json`. The copilot searches it, rebuilds it in memory
+  in a full checkout whenever a source is newer, and reads the running system directly for live
+  routes and tables. **After changing docs, routes or pages, run
+  `python appsail/build_project_knowledge.py` and commit the result** — CI fails otherwise.
+* **Scope.** It searches only IntelHub's own role-gated, audited records — never the internet,
+  social media, Aadhaar or any outside database.
 * **Conversation memory.** "this case", "he", "her" resolve to the record on screen or the subject of
   the previous answer.
 * **Same safeguards as before, applied to more data.** Names in every tool result are aliased before

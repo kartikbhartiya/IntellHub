@@ -45,7 +45,7 @@ import privacy
 
 LOG = logging.getLogger("ksp.copilot")
 
-MAX_TOOL_STEPS = int(os.environ.get("COPILOT_MAX_TOOL_STEPS", "5"))
+MAX_TOOL_STEPS = int(os.environ.get("COPILOT_MAX_TOOL_STEPS", "6"))
 LLM_TIMEOUT_S = float(os.environ.get("COPILOT_LLM_TIMEOUT", "25"))
 
 _GRAPH_GETTER = None
@@ -1282,7 +1282,20 @@ def tool_model_info(cache, model=None, **_):
 
 
 def tool_project_knowledge(cache, topic="overview", **_):
-    return {"sections": copilot_knowledge.lookup(topic)}
+    """Curated summary plus the best passages from the repository's own docs, code and pages."""
+    matches = copilot_knowledge.search(topic, k=6)
+    seen, uniq = set(), []
+    for m in matches:
+        if m["source"] != "curated" and m["title"] not in seen:
+            seen.add(m["title"])
+            uniq.append({"title": m["title"], "source": m["source"], "kind": m["kind"], "text": m["text"][:900]})
+    return {"sections": copilot_knowledge.lookup(topic), "matches": uniq[:4],
+            "best_is_curated": bool(matches) and matches[0]["source"] == "curated"}
+
+
+def tool_describe_platform(cache, aspect="summary", **_):
+    """Live facts about the running system: routes, loaded tables, pages, models, sources."""
+    return copilot_knowledge.describe_live(aspect, cache)
 
 
 # Tools that read one specific record; an answer built from them outranks a generic one.
@@ -1331,8 +1344,10 @@ TOOLS = {
                 {"topic": {"type": "string"}, "district": {"type": "string"}, "crime_type": {"type": "string"}}, ["topic"]),
     "model_info": (tool_model_info, "Metrics, baselines, notes and model card for the ML models (narrative_classifier, crime_forecast, recidivism_risk, conviction_outcome, case_closure, case_pendency, hotspot_clusters). Omit model for all.",
                    {"model": {"type": "string"}}, []),
-    "project_knowledge": (tool_project_knowledge, "Documentation about the IntelHub platform itself: overview, pages, data, models, copilot, governance, security, tech, domain (policing terms).",
+    "project_knowledge": (tool_project_knowledge, "Search the platform's own knowledge — every README/GOVERNANCE/DPIA/SECURITY section, backend module docs, API routes and web pages, regenerated from the repository whenever it changes — plus curated summaries and policing vocabulary. Use for ANY question about how IntelHub works, what a page/feature/model/route does, governance, privacy, deployment or terminology. Pass the question as topic.",
                           {"topic": {"type": "string"}}, ["topic"]),
+    "describe_platform": (tool_describe_platform, "Read the RUNNING system: aspect=routes (every live API endpoint and the role it needs), tables (every loaded data table with row counts and columns), pages (every screen), models (ML registry), sources (files the knowledge index covers), summary.",
+                          {"aspect": {"type": "string", "enum": ["summary", "routes", "tables", "pages", "models", "sources"]}}, ["aspect"]),
     "navigate": (None, "Move the officer's screen. Call at most once, only when showing a screen helps (e.g. after answering about a case, open it).",
                  {"action": {"type": "string", "enum": sorted(NAV_ACTIONS)},
                   "case_id": {"type": "string"}, "suspect_id": {"type": "string"}, "district": {"type": "string"},
@@ -1451,6 +1466,13 @@ def plan(text, idx, ents):
 
     definitional = not filters and not _cue(low, ("situation", "status", "rate", "level", "how many", "count",
                                                   "number", "trend", "list", "which", "top"))
+    live = next((a for a, words in (("routes", ("list the api", "all api", "all the api", "api routes", "list endpoints",
+                                               "all endpoints", "how many endpoints", "how many api", "what endpoints")),
+                                    ("tables", ("what tables", "which tables", "data tables", "columns", "schema")),
+                                    ("pages", ("what pages", "which pages", "list the pages", "what screens", "which screens")))
+                 if _cue(low, words)), None)
+    if live:
+        return [("describe_platform", {"aspect": live})]
     if copilot_knowledge.is_platform_question(text) or definitional and re.search(
             r"^\s*(what is|what's|what are|what does|define|meaning of|explain)\b.{0,12}\b(a |an |the )?"
             r"(rowdy|history.?sheet|fir|chargesheet|charge sheet|warrant|ipc|bns|cctns|mo\b|modus|io\b|"
@@ -1516,7 +1538,7 @@ def plan(text, idx, ents):
 
     m = re.search(r"\b(which|what|top|most|highest|lowest|least|rank|compare|breakdown|distribution|per|by)\b", low)
     group = None
-    for g, words in (("police_station", ("station",)), ("district", ("district", "region", "area", "city")),
+    for g, words in (("police_station", ("station",)), ("district", ("district", "region", "area", "city", "where")),
                      ("crime_type", ("crime type", "type of crime", "kind of crime", "category", "crimes are", "crime is")),
                      ("time_of_day", ("time of day", "what time", "hour", "night", "when do")),
                      ("weapon_used", ("weapon",)), ("vehicle_used", ("vehicle used", "getaway")),
@@ -1914,11 +1936,48 @@ def _say_model(r):
     return "\n".join(out)
 
 
+def _first_sentences(text, limit=650):
+    text = re.sub(r"\s+", " ", re.sub(r"[|#>`*]+", " ", text or "")).strip()
+    out = ""
+    for sent in re.split(r"(?<=[.!?])\s+", text):
+        if len(out) + len(sent) > limit and out:
+            break
+        out = (out + " " + sent).strip()
+    return out[:limit]
+
+
 def _say_knowledge(r):
     secs = r.get("sections") or []
-    if secs and secs[0].get("excerpt"):
-        return secs[0]["excerpt"]
-    return "\n\n".join(f"**{s['title']}** — {s['text']}" for s in secs)
+    matches = r.get("matches") or []
+    if secs and secs[0].get("excerpt") and r.get("best_is_curated", True):
+        see = [f"- See also: {m['title']} ({m['source']})" for m in matches[:2]]
+        return secs[0]["excerpt"] + ("\n" + "\n".join(see) if see else "")
+    if matches and not r.get("best_is_curated"):
+        top = matches[0]
+        out = f"**{top['title']}** — {_first_sentences(top['text'])}\n_(from {top['source']})_"
+        more = [m for m in matches[1:3]]
+        if more:
+            out += "\n" + "\n".join(f"- See also: {m['title']} ({m['source']})" for m in more)
+        return out
+    return "\n\n".join(f"**{s['title']}** — {s['text']}" for s in secs[:1]) + (
+        "\n" + "\n".join(f"- See also: {m['title']} ({m['source']})" for m in matches[:2]) if matches else "")
+
+
+def _say_platform(r):
+    if "routes" in r:
+        rows = r["routes"]
+        return (f"**{r.get('count', len(rows))} live API endpoints.**\n"
+                + "\n".join(f"- {x['path']} ({', '.join(x.get('methods', []))}) — {x.get('role')}" for x in rows[:25])
+                + (f"\n…and {len(rows) - 25} more" if len(rows) > 25 else ""))
+    if "tables" in r:
+        return (f"**{r['count']} data tables are loaded.**\n"
+                + "\n".join(f"- {t['table']}: {_fmt_int(t['rows'])} rows — {', '.join(t['columns'][:8])}" for t in r["tables"][:30]))
+    if "pages" in r:
+        return ("**Screens in the web client:**\n"
+                + "\n".join(f"- {p['url']}: {', '.join(p['headings'][:3]) or p['note'] or ', '.join(p['labels'][:3])}" for p in r["pages"]))
+    if "models" in r:
+        return f"**{r['count']} registered models:**\n" + "\n".join(f"- {n}: {h}" for n, h in r["models"].items())
+    return ("**What I know about myself right now:** " + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in r.items()) + ".")
 
 
 def compose(calls_and_results):
@@ -1946,6 +2005,8 @@ def compose(calls_and_results):
             parts.append(_say_insight(args.get("topic"), res))
         elif name == "project_knowledge":
             parts.append(_say_knowledge(res))
+        elif name == "describe_platform":
+            parts.append(_say_platform(res))
         elif name == "model_info":
             parts.append(_say_model(res))
     return "\n\n".join(p for p in parts if p)
@@ -2039,7 +2100,8 @@ def _trace(name, args, res):
              "get_officer": "Read officer record", "search_officers": "Searched officers",
              "search_registry": "Searched registry", "network": "Traversed link graph",
              "insight": "Read analytics", "model_info": "Read model registry",
-             "project_knowledge": "Read platform docs", "navigate": "Moved screen"}.get(name, name)
+             "project_knowledge": "Read platform docs", "describe_platform": "Inspected live system",
+             "navigate": "Moved screen"}.get(name, name)
     detail = ", ".join(f"{v}" for k, v in (args or {}).items() if v not in (None, "", False) and k not in ("limit", "sort_by", "order"))
     n = None
     if isinstance(res, dict):
@@ -2055,37 +2117,56 @@ def _system_prompt(lang_directive, briefing, page, context):
     here = ""
     if context:
         if context.get("case_id"):
-            here = f"\nThe officer is currently viewing case {context['case_id']}; 'this case', 'it' refer to it."
+            here = f"\nThe officer is viewing case {context['case_id']}; 'this case', 'it' refer to it."
         elif context.get("suspect_id"):
-            here = f"\nThe officer is currently viewing offender {context['suspect_id']}; 'he', 'she', 'this person' refer to them."
+            here = f"\nThe officer is viewing offender {context['suspect_id']}; 'he', 'she', 'this person' refer to them."
+    try:
+        pmap = copilot_knowledge.platform_map()
+        live = copilot_knowledge.describe_live("summary")
+    except Exception:
+        pmap, live = "", {}
+    tools = ", ".join(TOOLS)
     return (
         f"{lang_directive}\n\n"
-        "You are Kavya, the investigative copilot of KSP IntelHub — the AI crime-intelligence platform of the "
-        "Karnataka State Police State Crime Records Bureau (SCRB). You think like a senior crime analyst: precise, "
-        "proactive, and honest about uncertainty.\n\n"
-        "HOW YOU WORK\n"
-        "- You have tools that read the live corpus: 18,000 FIRs, 9,000 offenders, officers, courts, vehicles, cyber "
-        "identifiers, missing persons, the link graph, every ML output and the platform documentation. USE THEM. "
-        "Never answer a factual question about a case, person, count, ranking or trend from memory — call a tool.\n"
-        "- Records the question names may already be PRE-FETCHED below; use them instead of re-fetching.\n"
-        "- Chain tools when needed: e.g. get_case → get_person on its accused → network between two people.\n"
-        "- Person names appear as [PERSON_n] aliases. Use the alias exactly as given; it is turned back into the name "
-        "for the officer. Never invent a name.\n"
-        "- Only state case numbers, SUS-ids and KGIDs that appear in tool results. If a tool returns nothing, say so.\n\n"
+        "You are Kavya — the AI chief of staff of KSP IntelHub, the crime-intelligence platform of the Karnataka State "
+        "Police State Crime Records Bureau (SCRB). Think of yourself as the officer's JARVIS: you know every record, "
+        "every screen, every model and every line of the platform's documentation, you reason in several steps, and "
+        "you volunteer what the officer would want to know next. You are precise, calm, quick and candid about "
+        "uncertainty.\n\n"
+        "HOW YOU THINK (do this silently, show only the result)\n"
+        "1. Decompose: split the request into the facts it needs. A multi-part question gets every part answered.\n"
+        "2. Gather: call tools for every fact — several in one turn when they are independent. Never answer a "
+        "question about a case, person, count, ranking, trend, page, route, model or policy from memory. "
+        "Records the question names may already be PRE-FETCHED; use them.\n"
+        "3. Chain: follow leads the results expose — accused in a case → their profiles → links between them; a district "
+        "spike → its stations → its pendency; a model → its baselines and limits.\n"
+        "4. Cross-check: if two results disagree or a number looks off, check again or say which source you trust.\n"
+        "5. Synthesise: answer, then add ONE grounded insight the officer did not ask for but should see (a shared "
+        "co-offender, a rising trend, an overdue chargesheet, a pattern across cases), only if the tools support it.\n\n"
+        f"YOUR TOOLS: {tools}. project_knowledge searches the platform's own docs, code and pages, regenerated from the "
+        "repository on every change — trust it over your general knowledge about IntelHub. describe_platform reads "
+        "the running system (live routes, tables, pages, models).\n\n"
         "HOW YOU ANSWER\n"
-        "- Lead with the direct answer in one sentence, with the exact number or fact. Then 2-6 short bullet points "
-        "of supporting detail and, where useful, one concrete investigative next step (a lead, a link to check, a "
-        "pattern to watch). Use **bold** for the key figure. Keep it under ~180 words unless asked for depth.\n"
-        "- Be conversational and natural; no filler, no repeating the question, no 'As an AI'.\n"
-        "- If the question is ambiguous (e.g. a name shared by several people), say what you found and ask which one.\n"
-        "- Call the navigate tool when opening a screen helps (a single case or person → open it).\n"
-        "- End with one line: FOLLOWUPS: <short follow-up question> | <another> | <another>\n\n"
+        "- First sentence: the direct answer with the exact figure or fact, **bolded**. Then 2-6 tight bullets. "
+        "~200 words unless the officer asks for depth; a briefing or comparison may use more.\n"
+        "- Natural and confident; no filler, no restating the question, no 'As an AI'.\n"
+        "- Ambiguity (a name shared by several people): say what you found and ask which one.\n"
+        "- Person names appear as [PERSON_n] aliases — use them exactly; they become real names for the officer. "
+        "Only state case numbers, SUS-ids and KGIDs that appear in tool results.\n"
+        "- Call navigate when opening a screen helps (one case or one person → open it).\n"
+        "- End with one line: FOLLOWUPS: <follow-up> | <follow-up> | <follow-up>\n\n"
         "LIMITS YOU KEEP\n"
-        "- No output is evidence. Never say a person is guilty, will reoffend, or should be arrested; a risk index "
-        "orders attention, it does not establish anything about a person.\n"
+        "- No output is evidence. Never say a person is guilty, will reoffend or should be arrested; a risk index orders "
+        "attention and establishes nothing about a person. Ranked lists of people stay in the gated registry.\n"
+        "- You search only the KSP IntelHub records. You do not look people up on the internet, in Aadhaar or in any "
+        "outside database, and you say so if asked.\n"
         "- The corpus is simulated CCTNS-shaped data; say so if asked whether the records are real.\n"
-        "- Outside policing/this platform, answer briefly and steer back.\n"
-        f"{here}\n\nCURRENT PAGE: {page or '/'}\n\nLIVE BRIEFING (statewide aggregates):\n{briefing}"
+        "- Outside policing and this platform, answer briefly and steer back.\n"
+        f"{here}\n\nCURRENT PAGE: {page or '/'}\n\n"
+        f"PLATFORM MAP (generated from the code):\n{pmap}\n"
+        f"Knowledge index: {live.get('knowledge_chunks', '?')} passages from {live.get('documents', '?')} files, "
+        f"{live.get('documented_routes', '?')} API routes.\n\n"
+        f"LIVE BRIEFING (statewide aggregates):\n{briefing}"
     )
 
 
