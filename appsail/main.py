@@ -23,6 +23,7 @@ import numpy as np
 import networkx as nx
 import audit
 import agent_answers
+import copilot_engine
 _PROCESS_STARTED = time.time()
 import auth
 import grounding
@@ -118,6 +119,7 @@ LOG.info("Initializing Deep Intelligence Core...")
 
 # Global State
 knowledge_graph = nx.Graph()
+copilot_engine.configure(lambda: knowledge_graph)
 data_cache = {}
 models = {}
 
@@ -601,9 +603,9 @@ def _load_and_build_locked(force=False):
         row_indices = anom.index.tolist()
 
         anomalies = []
-        for row in flagged.itertuples():
+        for row_ix, row in flagged.iterrows():
             reasons = []
-            idx_in_feats = row_indices.index(row.Index)
+            idx_in_feats = row_indices.index(row_ix)
             v = features[idx_in_feats]
             z_scores = (v - means) / stds
             
@@ -2023,185 +2025,49 @@ def _sanitize_history(history, max_turns=10):
     return out
 
 
-def search_database_context(query_text: str) -> str:
-    """Dynamically search data_cache tables for exact matches or query keywords."""
-    if not query_text:
-        return ""
-    
-    q = query_text.lower().strip()
-    snippets = []
-
-    # 1. Search FIRs
-    df_firs = data_cache.get('firs')
-    if df_firs is not None and not df_firs.empty:
-        matches = df_firs[
-            df_firs['case_id'].astype(str).str.lower().str.contains(q, na=False) |
-            df_firs['crime_type'].astype(str).str.lower().str.contains(q, na=False) |
-            df_firs['district'].astype(str).str.lower().str.contains(q, na=False) |
-            df_firs['status'].astype(str).str.lower().str.contains(q, na=False)
-        ]
-        if not matches.empty:
-            sample = matches.head(6)
-            rows = [f"Case {r.get('case_id')}: {r.get('crime_type')} ({r.get('district')}), Status: {r.get('status')}, Severity: {r.get('severity_score')}, Date: {r.get('timestamp')}" for _, r in sample.iterrows()]
-            snippets.append(f"Matching Cases ({len(matches)} total):\n" + "\n".join(rows))
-
-    # 2. Search Criminals / Suspects / Rowdy Sheeters
-    df_crim = data_cache.get('criminals')
-    if df_crim is not None and not df_crim.empty:
-        matches = df_crim[
-            df_crim['criminal_id'].astype(str).str.lower().str.contains(q, na=False) |
-            df_crim['name'].astype(str).str.lower().str.contains(q, na=False) |
-            df_crim['gang_affiliation'].astype(str).str.lower().str.contains(q, na=False)
-        ]
-        if not matches.empty:
-            sample = matches.head(6)
-            rows = []
-            for _, r in sample.iterrows():
-                rs = "YES (Rowdy-Sheeter)" if r.get('rowdy_sheeter') else "No"
-                hs = "YES" if r.get('history_sheet') else "No"
-                warrant = "ACTIVE WARRANT" if r.get('active_warrant') else "Clean"
-                rows.append(f"Offender {r.get('criminal_id')} ({privacy.mask(r.get('name'))}): "
-                            f"Rowdy-Sheeter: {rs}, History-Sheet: {hs}, Warrant: {warrant}, "
-                            f"Gang: {r.get('gang_affiliation', 'None')}")
-            snippets.append(f"Matching Offender Records ({len(matches)} total):\n" + "\n".join(rows))
-
-    # 3. Search Court / Trial Data
-    df_courts = data_cache.get('courts')
-    if df_courts is not None and not df_courts.empty:
-        matches = df_courts[
-            df_courts['case_id'].astype(str).str.lower().str.contains(q, na=False) |
-            df_courts['chargesheet_status'].astype(str).str.lower().str.contains(q, na=False) |
-            df_courts['conviction_status'].astype(str).str.lower().str.contains(q, na=False)
-        ]
-        if not matches.empty:
-            sample = matches.head(6)
-            rows = [f"Court Record Case {r.get('case_id')}: Chargesheet: {r.get('chargesheet_status')}, Stage/Status: {r.get('conviction_status')}" for _, r in sample.iterrows()]
-            snippets.append(f"Matching Court/Trial Records ({len(matches)} total):\n" + "\n".join(rows))
-
-    # 4. Search Vehicles
-    df_veh = data_cache.get('vehicles')
-    if df_veh is not None and not df_veh.empty:
-        matches = df_veh[
-            df_veh['registration_no'].astype(str).str.lower().str.contains(q, na=False) |
-            df_veh['case_id'].astype(str).str.lower().str.contains(q, na=False) |
-            df_veh['vehicle_type'].astype(str).str.lower().str.contains(q, na=False)
-        ]
-        if not matches.empty:
-            sample = matches.head(5)
-            rows = [f"Vehicle {r.get('registration_no')} ({r.get('make_model', 'Vehicle')}): Status: {r.get('stolen_status')}, Linked Case: {r.get('case_id')}" for _, r in sample.iterrows()]
-            snippets.append(f"Matching Stolen Vehicle Records ({len(matches)} total):\n" + "\n".join(rows))
-
-    # 5. Search Missing Persons
-    df_miss = data_cache.get('missing')
-    if df_miss is not None and not df_miss.empty:
-        matches = df_miss[
-            df_miss['name'].astype(str).str.lower().str.contains(q, na=False) |
-            df_miss['district'].astype(str).str.lower().str.contains(q, na=False) |
-            df_miss['found_status'].astype(str).str.lower().str.contains(q, na=False)
-        ]
-        if not matches.empty:
-            sample = matches.head(5)
-            rows = [f"Missing Person {privacy.mask(r.get('name'))} (Age {r.get('age')}, "
-                    f"{r.get('district')}): Status: {r.get('found_status')}, "
-                    f"Missing Since: {r.get('missing_date')}" for _, r in sample.iterrows()]
-            snippets.append(f"Matching Missing Person Records ({len(matches)} total):\n" + "\n".join(rows))
-
-    # 6. Search Officers
-    df_off = data_cache.get('officers')
-    if df_off is not None and not df_off.empty:
-        matches = df_off[
-            df_off['name'].astype(str).str.lower().str.contains(q, na=False) |
-            df_off['badge_no'].astype(str).str.lower().str.contains(q, na=False) |
-            df_off['rank'].astype(str).str.lower().str.contains(q, na=False) |
-            df_off['district'].astype(str).str.lower().str.contains(q, na=False)
-        ]
-        if not matches.empty:
-            sample = matches.head(5)
-            rows = [f"Officer {privacy.mask(r.get('name'))} ({r.get('rank')}, "
-                    f"Badge {privacy.mask(r.get('badge_no'))}): Station: {r.get('station')}, "
-                    f"District: {r.get('district')}, Solved Rate: {r.get('solve_rate', 0)}%"
-                    for _, r in sample.iterrows()]
-            snippets.append(f"Matching Police Officers ({len(matches)} total):\n" + "\n".join(rows))
-
-    # Special Keyword Summary Enrichment
-    if any(k in q for k in ["pending", "trial", "fir", "status", "under investigation", "chargesheet"]):
-        if df_firs is not None and not df_firs.empty:
-            status_counts = df_firs['status'].value_counts().to_dict()
-            snippets.append(f"Live FIR Status Totals across entire database: {status_counts}")
-        if df_courts is not None and not df_courts.empty:
-            court_counts = df_courts['conviction_status'].value_counts().to_dict()
-            snippets.append(f"Live Court Trial Status Totals across entire database: {court_counts}")
-
-    if any(k in q for k in ["rowdy", "sheeter", "warrant", "history", "gang"]):
-        if df_crim is not None and not df_crim.empty:
-            rs_count = int(df_crim.get('rowdy_sheeter', pd.Series(dtype=bool)).sum())
-            hs_count = int(df_crim.get('history_sheet', pd.Series(dtype=bool)).sum())
-            w_count = int(df_crim.get('active_warrant', pd.Series(dtype=bool)).sum())
-            snippets.append(f"Rowdy Sheeter Summary: {rs_count} registered Rowdy-Sheeters, {hs_count} History-Sheeters, {w_count} Active Arrest Warrants on file.")
-
-    return "\n\n".join(snippets)
-
-
 @app.route('/serverless/api/chat', methods=['POST'])
 @audit.audited('copilot_chat')
 @auth.require_role('investigator')
 def route_chat():
+    """The long-form copilot. Same engine as /agent, without moving the screen."""
     data = request.get_json(silent=True) or {}
-    query = data.get('query', '')
+    query = (data.get('query') or '').strip()
+    if not query:
+        return jsonify_safe({"reply": "Ask me about any case, person, district or model."})
     history = _sanitize_history(data.get('history'))
-    lang = data.get('lang')
+    refusal = agent_answers.refusal_for(query)
+    if refusal:
+        return jsonify_safe({"reply": refusal, "grounding": grounding.check(refusal, data_cache)})
 
-    briefing = build_intelligence_briefing()
-    matched_db_context = search_database_context(query)
-
-    if not llm_available():
-        return jsonify_safe({"reply": (
-            "I am the KSP Intelligence Copilot. Set NVIDIA_API_KEY or GROQ_API_KEY to enable my "
-            f"live connection. Here is the current local intelligence briefing:\n\n{briefing}"
-            + (f"\n\nDirect Database Match Snippets:\n{matched_db_context}" if matched_db_context else "")
-        )})
-
-    rowdy_sheeter_domain_note = (
-        "POLICE DOMAIN KNOWLEDGE:\n"
-        "- A 'Rowdy Sheeter' (or Rowdy Sheet) is an official legal classification maintained by police stations under "
-        "Section 95/96 of the Karnataka Police Act & Police Manual for habitual violence offenders, extortionists, and gang members.\n"
-        "- YES! Rowdy Sheeters are directly tracked in the relational database provided. In `CriminalsRegistry.csv` (and the relational dataset), "
-        "there is an explicit boolean column `rowdy_sheeter` (along with `history_sheet` and `active_warrant`).\n"
-        "- Pending Trials and Pending FIRs are fully tracked in the `Courts` table (`conviction_status`) and `FIRs` table (`status`='Under Investigation').\n"
-    )
-
-    system_prompt = (
-        _lang_directive(lang) + "\n\n" +
-        "You are the KSP IntelHub Investigative Copilot for the Karnataka State Police "
-        "State Crime Records Bureau (SCRB) — an elite, highly proactive crime analyst and AI detective. "
-        "Use the live intelligence briefing and database search records below as your absolute ground truth. Your capabilities go far beyond basic Q&A:\n"
-        "1. CROSS-DOMAIN SYNTHESIS: Connect the dots across cases, suspects, vehicles, cyber rings, courts, rowdy-sheeters, and officers. Surface non-obvious links.\n"
-        "2. PREDICTIVE INSIGHT: Highlight DBScan crime clusters, Adamic-Adar predicted alliances, and recidivism risk. Explain *why* a suspect is high risk or a cluster is forming.\n"
-        "3. TACTICAL RECOMMENDATIONS: Don't just report numbers. Suggest concrete next steps (e.g., 'Deploy patrols to X due to rising trend', 'Investigate suspect Y for link to Z').\n"
-        "4. EXACT DATABASE ANSWERS: When asked about pending trials, pending FIRs, rowdy sheeters, warrants, or specific case IDs, provide exact numbers and details from the dataset.\n"
-        "5. GROUNDED REASONING: Reason, rank and recommend — but only from the records below. If the briefing does not contain what is needed, say so plainly ""rather than inferring it. Never state a case number, offender id or officer id ""that does not appear above. An investigator cannot tell a confident wrong ""answer from a confident right one, and will act on either.\n\n"
-        f"{rowdy_sheeter_domain_note}\n\n"
-        f"LIVE INTELLIGENCE BRIEFING:\n{briefing}\n\n"
-        + (f"MATCHED DATABASE RECORDS FOR QUERY:\n{matched_db_context}\n\n" if matched_db_context else "")
-    )
-
-    messages = [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": query}]
-    reply = llm_complete(messages, temperature=0.35, max_tokens=1024)
-    if not reply:
-        reply = f"Live LLM connection failed. Here is the current local intelligence briefing:\n\n{briefing}"
-        if matched_db_context:
-            reply += f"\n\nDirect Database Matches:\n{matched_db_context}"
+    result = None
+    if llm_available():
+        try:
+            result = copilot_engine.llm_answer(
+                query, data_cache, LLM_PROVIDERS, history=history,
+                lang_directive=_lang_directive(data.get('lang')),
+                briefing=build_intelligence_briefing(), page=data.get('page'),
+                context=data.get('context'))
+        except Exception as e:
+            LOG.warning("copilot LLM loop failed: %s", e)
+    if result is None:
+        result = copilot_engine.offline_answer(query, data_cache, data.get('context'), history)
+    if result is None:
+        grounded = agent_answers.answer(query, data_cache)
+        result = {"reply": grounded["reply"] if grounded else
+                  "I could not find that in the records. Here is the current statewide briefing:\n\n"
+                  + build_intelligence_briefing()}
+    reply = result["reply"]
     # Every identifier the copilot names is checked against the corpus. A fluent
     # sentence citing a case number that does not exist is the failure an officer
-    # cannot spot — and this answer is read aloud by the client, which makes an
-    # invented statement sound more authoritative, not less.
+    # cannot spot.
     report = grounding.check(reply, data_cache)
     if not report["grounded"]:
         LOG.warning("copilot reply referenced %d unknown identifier(s): %s",
                     len(report["unknown"]),
                     ", ".join(u["value"] for u in report["unknown"][:5]))
         reply = grounding.annotate(reply, report)
-    return jsonify_safe({"reply": reply, "grounding": report})
+    return jsonify_safe({"reply": reply, "grounding": report, "trace": result.get("trace", []),
+                         "followups": result.get("followups", []), "mode": result.get("mode")})
 
 # ---------------------------------------------------------------------------
 # Dispatch / predictive resourcing
@@ -2896,54 +2762,6 @@ def llm_complete(messages, temperature=0.3, max_tokens=1024):
     return None
 
 
-def _agent_llm(text, briefing, districts, history=None, lang=None, context=None):
-    """Ask the LLM for intent + a localized natural-language reply, returned as JSON."""
-    if not llm_available():
-        return None
-    try:
-        ctx_line = ""
-        if context:
-            here = context.get('case_id') or context.get('suspect_id')
-            if here:
-                ctx_line = (f"\nCURRENT SCREEN: the officer is viewing {here}. Resolve 'this', 'that', "
-                            f"'it', 'this case', 'this suspect' to {here} unless they name another id.")
-        sys = (
-            _lang_directive(lang) + "\n\n" +
-            "You are Kavya, the elite AI Command Pilot and Lead Intelligence Detective for KSP IntelHub (Karnataka State Police, SCRB). "
-            "You do not just answer — you DRIVE the system: navigate the officer to the right screen, "
-            "explain what they're seeing, and proactively surface hidden risks (like recidivism, emerging hotspots, or unlinked crimes). "
-            "The officer speaks English or Kannada (any script).\n"
-            "Respond with a SINGLE JSON object, no prose, no markdown:\n"
-            '{"action": <one of: open_case, open_suspect, show_heatmap, show_network, show_dispatch, '
-            'show_anomalies, show_analytics, show_models, recent_cases, show_registry, open_copilot, answer>, '
-            '"params": {"case_id": "FIR-#####", "suspect_id": "SUS-####", "district": "<name or null>", '
-            '"kind": "<vehicles|missing|cybercrime|officers|courts|criminals>"}, '
-            '"reply": "<1-2 sentences in the officer\'s language: confirm the action AND deliver a sharp tactical insight. Act as a seasoned intelligence analyst.>", '
-            '"suggestions": ["<high-value follow-up query>", "<tactical next step>", "<data drill-down>"]}\n'
-            "CRITICAL TRUTH & VERIFICATION RULE:\n"
-            "1. You must NEVER blindly accept, agree with, or confirm unverified assumptions made by the officer.\n"
-            "2. Cross-reference every claim against the live INTELLIGENCE BRIEFING and database context below.\n"
-            "3. If the officer asks a question (e.g. 'is this case solved?', 'does X have a warrant?', 'who is the suspect?', 'show me suspect based on ai matching'), "
-            "search the database records below and reply with exact database facts, numbers, and verified legal records. "
-            "NEVER repeat generic boilerplate phrases like 'Opening dossier' when answering questions. Use 'answer' or 'open_copilot' when answering factual or analytical questions.\n"
-            "'suggestions' MUST be 2-3 genuinely useful tactical follow-ups that push the investigation forward (in the officer's language).\n"
-            "Use the conversation history to resolve follow-ups ('open it', 'that district'). Only include params that apply.\n"
-            f"Known districts: {', '.join(districts[:40])}." + ctx_line + "\n"
-            f"INTELLIGENCE BRIEFING:\n{briefing}"
-        )
-        msgs = [{"role": "system", "content": sys}] + _sanitize_history(history, 6) + [{"role": "user", "content": text}]
-        raw = llm_complete(msgs, temperature=0.15, max_tokens=800) or ""
-        m = re.search(r'\{.*\}', raw, re.S)
-        if not m:
-            return None
-        parsed = json.loads(m.group(0))
-        if isinstance(parsed, dict) and parsed.get("action"):
-            return parsed
-    except Exception as e:
-        LOG.warning(f"Agent LLM failed: {e}")
-    return None
-
-
 _QUESTION_CUES = ("?", "how many", "how much", "what", "why", "which", "who", "where", "when",
                   "list", "tell me", "explain", "summar", "compare", "should", "is there",
                   "are there", "kya", "kaun", "kahan", "kyun", "batao",
@@ -3171,6 +2989,13 @@ def _upgrade_answer_to_nav(action, params, is_question=False):
 
 
 def run_agent(query, history=None, lang=None, page=None, context=None):
+    result = _run_agent(query, history, lang, page, context)
+    if result.get("reply") and not result.get("speech"):
+        result["speech"] = copilot_engine.speech_summary(result["reply"])
+    return result
+
+
+def _run_agent(query, history=None, lang=None, page=None, context=None):
     text = (query or "").strip()
     if not text:
         return {"action": "answer", "params": {}, "reply": "How can I assist your investigation?",
@@ -3180,23 +3005,28 @@ def run_agent(query, history=None, lang=None, page=None, context=None):
     greetings = ("hi", "hello", "hey", "namaste", "good morning", "good afternoon", "good evening",
                  "namaskara", "namaskar", "नमस्ते", "नमस्कार", "ನಮಸ್ತೆ", "ನಮಸ್ಕಾರ")
     if tl in greetings or any(w == tl for w in greetings):
-        reply = "Namaste! I am Kavya, your KSP AI Assistant. How can I assist your investigation today?"
+        reply = ("Namaste! I am Kavya, your KSP investigative copilot. I can read any FIR, offender, officer or "
+                 "registry record, rank and count crime anywhere in Karnataka, trace links between people and "
+                 "explain every forecast and risk model. What are we working on?")
         if lang and lang.startswith("hi"):
             reply = "नमस्ते! मैं काव्या हूँ, आपकी केएसपी एआई खोजी सहायक। आज मैं आपकी क्या मदद कर सकती हूँ?"
         elif lang and lang.startswith("kn"):
             reply = "ನಮಸ್ತೆ! ನಾನು ಕಾವ್ಯಾ, ನಿಮ್ಮ ಕೆಎಸ್‌ಪಿ ಎಐ ತನಿಖಾ ಸಹಾಯಕ. ಇಂದು ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?"
         return {"action": "answer", "params": {}, "reply": reply,
-                "suggestions": ["Show heatmap", "Emerging trend alerts", "Criminal links of FIR-20000"]}
+                "suggestions": [_s("Brief me on the state", "give me a crime overview"),
+                                _s("Emerging trend alerts", "which crimes are spiking?"),
+                                _s("Who is the top offender?", "who is SUS-8286?")]}
 
     tl = text.lower()
     # "What can I do here / help / guide me" → deterministic, page-aware walkthrough.
-    if _has_any(tl, _HELP_CUES) and len(text) < 60:
+    if _has_any(tl, _HELP_CUES) and len(text) < 60 and not re.search(
+            r"project|platform|intelhub|about|datathon|built|model|data|stack|governance", tl):
         g = _page_guide(page, lang)
         g["transcript"] = text
         return g
 
     # "open the suspect for that case / for FIR-xxxxx" → resolve to the real linked suspect.
-    cs = _resolve_case_suspect(text, context, history)
+    cs = None if _is_question(text) else _resolve_case_suspect(text, context, history)
     if cs:
         cs["suggestions"] = _suggest_next(cs["action"], cs.get("params", {}))
         cs["transcript"] = text
@@ -3211,113 +3041,185 @@ def run_agent(query, history=None, lang=None, page=None, context=None):
 
     det = _deterministic_intent(text)
     question = _is_question(text)
-    explicit_entity = bool(det and det["action"] in ("open_case", "open_suspect") and not question)
-    imperative_nav = bool(det and not question)
 
-    # Explicit FIR/suspect id without a question → open it instantly with an accurate confirmation.
-    if explicit_entity:
-        params = det.get("params", {})
-        return {"action": det["action"], "params": params,
-                "reply": _fallback_reply(det["action"], params),
-                "suggestions": _suggest_next(det["action"], params), "transcript": text}
+    # A refusal is the platform's stated position, not a phrasing choice.
+    if det and (det.get("params") or {}).get("refused"):
+        return _agent_response(det["action"], det.get("params", {}), det.get("reply"),
+                               det.get("suggestions"), text)
 
-    # If officer asks a factual question about a specific FIR case:
-    fir_m = (
-        re.search(r'\b(\d{15,18})\b', text) or
-        re.search(r'fir[\s\-_]*0*(\d{1,6})', text, re.I) or 
-        re.search(r'case[\s\-_]*0*(\d{1,6})', text, re.I) or 
-        re.search(r'\b(2\d{4})\b', text)
-    )
-    if question and fir_m:
-        c_id = normalize_case_id(fir_m.group(1))
-        df_f = data_cache.get('firs')
-        if df_f is not None and not df_f.empty:
-            match_row = df_f[df_f['case_id'].astype(str) == str(c_id)]
-            if match_row.empty:
-                match_row = df_f[df_f['case_id'].astype(str).str.endswith(str(c_id))]
-            if not match_row.empty:
-                r = match_row.iloc[0]
-                c_type = r.get('crime_type', 'Crime')
-                stn = r.get('police_station', 'KSP Station')
-                dist = r.get('district', 'Karnataka')
-                stat = r.get('status', 'Registered')
-                sev = r.get('severity_score', 75)
-                reply = f"FIR {r.get('case_id')} is registered as a {c_type} case at {stn} station ({dist} district). Status: {stat}, Severity Index: {int(sev)}/100."
-                return {
-                    "action": "answer",
-                    "params": {"case_id": str(r.get('case_id'))},
-                    "reply": reply,
-                    "suggestions": [
-                        {"label": "Open full dossier", "query": f"open FIR-{r.get('case_id')}"},
-                        {"label": "Show suspect matching", "query": f"show me suspect based on ai matching for {r.get('case_id')}"},
-                        {"label": "Show crime map", "query": f"show heatmap of {dist}"}
-                    ],
-                    "transcript": text
-                }
-
-    briefing = build_intelligence_briefing()
-    districts = sorted(data_cache['firs']['district'].unique().tolist()) if 'firs' in data_cache else []
-    llm = _agent_llm(text, briefing, districts, history, lang, context) if llm_available() else None
-
-    # A refusal or a corpus-grounded answer outranks the model. The refusal is the
-    # platform's stated position, not a phrasing choice, and a computed count beats a
-    # fluent guess at the same question.
-    if det and (det.get("grounding") or (det.get("params") or {}).get("refused")):
-        action = det["action"]
-        params = det.get("params", {})
-        reply = det.get("reply") or _fallback_reply(action, params)
-    elif imperative_nav:
-        # A "show X" command: keep the reliable rule-based destination, but let the LLM (with
-        # memory) fill missing params like a district referred to as "it / that area".
+    # A navigation command ("open FIR-20345", "show heatmap of Mysuru"): go there at
+    # once, and say something worth hearing about what is on that screen rather than
+    # a bare "Opening dossier".
+    if det and not question and det["action"] != "answer":
         action = det["action"]
         params = dict(det.get("params", {}))
-        if llm and isinstance(llm.get("params"), dict):
-            for k, v in llm["params"].items():
-                if _valid_param(v) and not params.get(k):
-                    params[k] = v
-        # The parser's own wording first: it knows which destination it chose and why,
-        # and regenerating from the action alone produced "Done." for any destination
-        # without a canned phrase.
-        reply = (llm or {}).get("reply") or det.get("reply") or _fallback_reply(action, params)
-    elif llm:
-        params = {k: v for k, v in (llm.get("params") or {}).items() if _valid_param(v)}
-        action = _upgrade_answer_to_nav(llm.get("action") or "answer", params, question)
-        reply = llm.get("reply") or _fallback_reply(action, params)
-    elif det:
-        action, params = det["action"], det.get("params", {})
-        # Keep the parser's own reply when it wrote one; regenerating from the action
-        # discarded every computed answer and replaced it with "Done."
-        reply = det.get("reply") or _fallback_reply(action, params)
-    else:
+        if action in ("show_heatmap", "show_dispatch", "recent_cases") and not params.get("district") \
+                and re.search(r"\b(that|same|this) (district|area|region|place)\b|\bthere\b", tl):
+            for h in reversed(history or []):
+                d = _detect_district(str(h.get("content") or ""))
+                if d:
+                    params["district"] = d
+                    break
+        reply = _nav_brief(action, params) or det.get("reply") or _fallback_reply(action, params)
+        return _agent_response(action, params, reply, det.get("suggestions") or _suggest_next(action, params, text),
+                               text)
+
+    # Everything else is a question, and questions are answered from the records.
+    grounded = det if det and det.get("grounding") else None
+    if grounded and (grounded.get("grounding") or {}).get("names_withheld"):
+        # A ranked list of people stays in the gated registry (agent_answers._watchlist).
+        return _agent_response(grounded["action"], grounded.get("params", {}), grounded["reply"],
+                               grounded.get("suggestions"), text, extra={"grounding_source": grounded["grounding"]})
+
+    result = None
+    if llm_available():
+        try:
+            result = copilot_engine.llm_answer(
+                text, data_cache, LLM_PROVIDERS, history=_sanitize_history(history, 8),
+                lang_directive=_lang_directive(lang), briefing=build_intelligence_briefing(),
+                page=page, context=context, extra_facts=grounded["reply"] if grounded else None)
+        except Exception as e:
+            LOG.warning("copilot LLM loop failed, answering deterministically: %s", e)
+            result = None
+    if result is None:
+        offline = copilot_engine.offline_answer(text, data_cache, context, history)
+        if grounded and offline is None:
+            # A computed answer from agent_answers already says exactly this.
+            result = {"reply": grounded["reply"], "trace": [], "nav": None, "mode": "deterministic",
+                      "suggestions": grounded.get("suggestions")}
+        else:
+            result = offline
+
+    if result is None:
+        if det and (not question or det["action"] in _ANSWERABLE_NAV):
+            action, params = det["action"], det.get("params", {})
+            return _agent_response(action, params, det.get("reply") or _fallback_reply(action, params),
+                                   det.get("suggestions") or _suggest_next(action, params, text), text)
         # Not an outage. Nothing matched because the question is outside what this
-        # system holds, and saying "I could not reach my reasoning core" for "what is
-        # the weather" teaches a user to distrust the tool exactly when it is behaving
-        # correctly.
-        action, params, reply = "answer", {}, (
-            "That is outside what this platform holds. I work over the KSP case "
-            "corpus: FIRs, people named in them, the link graph, and the models "
-            "scored on that data. Try \"how many cases are there\", \"which district "
-            "has the most crime\", \"open FIR 100070034202600005\", or \"how accurate "
-            "is the recidivism model\".")
+        # system holds; saying "I could not reach my reasoning core" teaches a user to
+        # distrust the tool exactly when it is behaving correctly.
+        return _agent_response("answer", {}, (
+            "That is outside what I can find in the KSP records. I can look up any FIR, offender, "
+            "officer, vehicle, cyber identifier or missing person; count and rank cases by district, "
+            "crime, station, year or time of day; trace links between people; and explain the "
+            "forecasts, hotspots and risk models. Try \"who are the accused in FIR-20345\", "
+            "\"how many murders in Mysuru in 2024\", or \"which station has the most chain snatching\"."),
+            _suggest_next("answer", {}, text), text)
 
-    if not reply:
-        reply = _fallback_reply(action, params) or "Done."
+    nav = result.get("nav") or {}
+    if not nav and det and det["action"] != "answer":
+        nav = {"action": det["action"], "params": det.get("params", {})}
+    action = nav.get("action") or "answer"
+    params = {k: v for k, v in (nav.get("params") or {}).items() if _valid_param(v)}
+    # A question about a record answers it in place; it moves the screen only when the
+    # question is about one record, so asking "how many" never yanks the officer away.
+    if action in ("open_case", "open_suspect") and not _single_entity(result):
+        action, params = "answer", {}
 
-    # Prefer the LLM's own suggestions when it returned good ones, else derive them.
-    suggestions = []
-    if llm and isinstance(llm.get("suggestions"), list):
-        for s in llm["suggestions"][:4]:
-            if isinstance(s, str) and s.strip():
-                suggestions.append(_s(s.strip()[:42], s.strip()))
-            elif isinstance(s, dict) and s.get("query"):
-                suggestions.append(_s(str(s.get("label") or s["query"])[:42], str(s["query"])))
-    if not suggestions:
-        suggestions = _suggest_next(action, params, text)
+    suggestions = [_s(u[:48], u) for u in (result.get("followups") or []) if isinstance(u, str) and u.strip()]
+    suggestions = suggestions or result.get("suggestions") or _engine_suggestions(result, text) \
+        or _suggest_next(action, params, text)
+    return _agent_response(action, params, result["reply"], suggestions, text,
+                           extra={"trace": result.get("trace", []), "mode": result.get("mode")})
 
+
+# Screens that are a fair answer to a question the engine could not answer in words
+# ("where are the hotspots?"). A recent-cases list is not: "what is the weather today"
+# matched "today" and used to answer with the case directory.
+_ANSWERABLE_NAV = {"show_heatmap", "show_network", "show_dispatch", "show_analytics", "show_models",
+                   "show_registry", "show_anomalies", "open_case", "open_suspect"}
+
+
+def _single_entity(result):
+    ents = result.get("entities") or {}
+    return len(ents.get("cases") or []) + len(ents.get("suspects") or []) == 1
+
+
+def _engine_suggestions(result, text=""):
+    """Follow-ups that continue from the record the answer was about — minus the one
+    just asked, which would only repeat the answer."""
+    asked = (text or "").lower()
+    picks = _engine_suggestion_pool(result)
+    keys = {"accused": ("accused", "suspect"), "similar": ("similar", "mo "), "court": ("court", "trial"),
+            "co-offenders": ("co-offender", "associate", "partner"), "network": ("network", "connect"),
+            "warrant": ("warrant",), "forecast": ("forecast",), "pendency": ("pendency",), "map": ("map", "heatmap"),
+            "station": ("station",), "time": ("time of day", "when"), "year": ("year",)}
+    def _repeats(s):
+        q = s["query"].lower()
+        return any(k in q and any(w in asked for w in ws) for k, ws in keys.items())
+    return [s for s in picks if not _repeats(s)][:3] or picks[:3]
+
+
+def _engine_suggestion_pool(result):
+    ents = result.get("entities") or {}
+    if ents.get("cases"):
+        cid = ents["cases"][0]
+        return [_s("Who are the accused?", f"who are the accused in {cid}?"),
+                _s("Similar MO cases", f"which cases are similar to {cid}?"),
+                _s("Court status", f"what is the court status of {cid}?"),
+                _s("Who investigates it?", f"who is the investigating officer of {cid}?")]
+    if ents.get("suspects"):
+        sid = ents["suspects"][0]
+        return [_s("Co-offenders", f"who are the co-offenders of {sid}?"),
+                _s("Network graph", f"show network of {sid}"),
+                _s("Does a warrant exist?", f"does {sid} have an active warrant?"),
+                _s("All their cases", f"list every case of {sid}")]
+    d = ents.get("district")
+    if d:
+        return [_s(f"Forecast for {d}", f"what is the forecast for {d}?"),
+                _s(f"Pendency in {d}", f"what is the pendency situation in {d}?"),
+                _s(f"Map {d}", f"show heatmap of {d}")]
+    ct = ents.get("crime_type")
+    if ct:
+        return [_s("Worst stations", f"which police station has the most {ct}?"),
+                _s("Time of day", f"what time of day does {ct} happen?"),
+                _s("Year by year", f"how many {ct} cases per year?")]
+    return []
+
+
+def _nav_brief(action, params):
+    """One or two sentences about what the screen being opened holds."""
+    try:
+        if action == "open_case" and params.get("case_id"):
+            c = copilot_engine.tool_get_case(data_cache, case_ref=params["case_id"])
+            if c.get("error"):
+                return None
+            acc = c.get("accused") or []
+            who = ", ".join(f"{a.get('name')} ({a['suspect_id']})" for a in acc[:3])
+            court = (c.get("court") or {}).get("conviction_status")
+            return (f"Opening FIR {c['case_id']}: {c.get('crime_type')} at {c.get('police_station')}, "
+                    f"{c.get('district')} — {c.get('status')}, severity {c.get('severity_score')}."
+                    + (f" {len(acc)} accused: {who}{'…' if len(acc) > 3 else ''}." if acc else " No accused linked yet.")
+                    + (f" Court: {court}." if court else ""))
+        if action == "open_suspect" and params.get("suspect_id"):
+            p = copilot_engine.tool_get_person(data_cache, person_ref=params["suspect_id"])
+            if p.get("error") or p.get("ambiguous") or not p.get("suspect_id"):
+                return None
+            flags = [f for f, on in (("rowdy-sheeter", p.get("rowdy_sheeter")),
+                                     ("active warrant", p.get("active_warrant"))) if on]
+            return (f"Opening {p.get('name')} ({p['suspect_id']}): {p.get('risk_level') or 'unrated'} risk, "
+                    f"named in {p.get('cases_in_corpus', 0)} case(s), {len(p.get('co_offenders') or [])} co-offender(s)"
+                    + (f", {', '.join(flags)}" if flags else "") + ".")
+        if action in ("show_heatmap", "recent_cases", "show_dispatch") and (params.get("district") or params.get("crime_type")):
+            r = copilot_engine.tool_search_cases(data_cache, district=params.get("district"),
+                                                 crime_type=params.get("crime_type"), limit=1)
+            n = r.get("total_matching", 0)
+            scope = " ".join(x for x in (params.get("crime_type"), "cases", ("in " + params["district"]) if params.get("district") else None) if x)
+            top = next(iter((r.get("by_crime_type") or {}).items()), None)
+            label = {"show_heatmap": "Mapping", "recent_cases": "Listing", "show_dispatch": "Dispatch view for"}[action]
+            return (f"{label} {n:,} {scope}" + (f"; {r['by_status'].get('Under Investigation', 0):,} still under investigation" if r.get("by_status") else "")
+                    + (f"; most common is {top[0]} ({top[1]:,})" if top else "") + ".")
+    except Exception as e:
+        LOG.warning("navigation brief failed for %s: %s", action, e)
+    return None
+
+
+def _agent_response(action, params, reply, suggestions, text, extra=None):
+    """Validate, verify and package an agent reply — the single exit for run_agent."""
+    reply = reply or _fallback_reply(action, params or {}) or "Done."
     # The client switches on `action`; an unrecognised value silently does nothing
     # there, so validate rather than rely on that accident.
     action = grounding.safe_action(action)
-
     # Verify every identifier the reply names. An invented case number in a fluent
     # sentence is the failure an operator cannot spot.
     report = grounding.check(reply, data_cache)
@@ -3326,10 +3228,17 @@ def run_agent(query, history=None, lang=None, page=None, context=None):
                     len(report["unknown"]),
                     ", ".join(u["value"] for u in report["unknown"][:5]))
         reply = grounding.annotate(reply, report)
-
-    return {"action": action, "params": params, "reply": reply,
-            "suggestions": suggestions, "transcript": text,
-            "grounding": report}
+    norm = []
+    for s in (suggestions or [])[:4]:
+        if isinstance(s, dict) and s.get("query"):
+            norm.append(_s(str(s.get("label") or s["query"])[:48], str(s["query"])))
+        elif isinstance(s, str) and s.strip():
+            norm.append(_s(s.strip()[:48], s.strip()))
+    out = {"action": action, "params": params or {}, "reply": reply,
+           "speech": copilot_engine.speech_summary(reply),
+           "suggestions": norm, "transcript": text, "grounding": report}
+    out.update(extra or {})
+    return out
 
 
 @app.route('/serverless/api/dispatch', methods=['GET'])

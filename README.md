@@ -392,9 +392,29 @@ threshold, because real geography defeats thresholds: Koppal and Hosapete
   intervening still changes the outcome.
 * Served at `/serverless/api/pendency` and rendered at [`/pendency`](web/src/app/pendency/page.tsx).
 
-### 7. 🤖 AI Investigative Copilot (Dynamic Cross-Table In-Memory Query Engine)
-* High-speed analytical copilot powered by LLM integration (`NVIDIA_API_KEY` / `GROQ_API_KEY`) with dynamic memory searching across all 26 relational tables.
-* Answers complex queries on **Rowdy Sheeters**, **Pending Trials**, **Under Investigation FIRs**, **Stolen Vehicles**, and **District Hotspots** in English or Kannada.
+### 7. 🤖 Kavya — AI Investigative Copilot (tool-calling retrieval over the whole corpus)
+* **It reads the records instead of a summary.** `appsail/copilot_engine.py` gives the copilot
+  retrieval tools over every table: a full case dossier (narrative, accused with priors and flags,
+  victim, complainant, IO, arrests, chargesheet, court stage, stolen vehicles, cyber identifiers,
+  CCTV, Dial-112, pendency score, similar-MO cases), a person profile (every case they are named in,
+  co-offenders, syndicates, recidivism drivers, court outcomes), officers, every side registry,
+  filtered counts and rankings by district / station / crime / year / month / time of day / weapon,
+  shortest paths through the link graph, every ML output, and the platform's own documentation
+  (`appsail/copilot_knowledge.py`).
+* **LLM tool-calling loop.** Groq `llama-3.3-70b-versatile` (NVIDIA fallback) decides which tools to
+  call and chains them. Records the question names are resolved and pre-fetched first, so a typical
+  answer costs one round trip.
+* **Works with no API key.** The same entity resolution and tools drive a deterministic engine that
+  composes the answer when no provider is configured or all of them fail.
+* **Conversation memory.** "this case", "he", "her" resolve to the record on screen or the subject of
+  the previous answer.
+* **Same safeguards as before, applied to more data.** Names in every tool result are aliased before
+  egress and restored locally; every case, offender and officer id in a reply is verified against
+  the corpus; questions of guilt, requests for action against a person, and watchlists of names are
+  refused.
+* **Siri-style voice UI.** A live waveform that follows your microphone level and each word Kavya
+  speaks, an animated orb, a screen-edge glow in voice mode, a conversation transcript with clickable
+  case / offender ids, and a strip showing which records each answer was read from. English and Kannada.
 
 ---
 

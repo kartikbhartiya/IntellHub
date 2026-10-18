@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Mic, MicOff, Send, Sparkles, X, ArrowRight, Volume2, VolumeX, AudioLines } from "lucide-react";
-import { askAgent, AgentResult, AgentSuggestion, ChatTurn, ApiError } from "@/lib/api";
+import { Mic, MicOff, Send, X, ArrowRight, Volume2, VolumeX, Database, Cpu, RotateCcw, ChevronDown } from "lucide-react";
+import { askAgent, AgentResult, AgentSuggestion, AgentTraceStep, ChatTurn, ApiError } from "@/lib/api";
+import { SiriWave, SiriOrb, EdgeGlow, useMicLevel, VoiceState } from "./SiriVisual";
 
 type Lang = { code: string; label: string; native: string };
 const LANGS: Lang[] = [
@@ -13,10 +14,12 @@ const LANGS: Lang[] = [
 ];
 
 const SUGGESTIONS = [
-  "Show suspects linked to homicide",
-  "Show heatmap of Bengaluru Urban",
-  "Criminal links of FIR-20345",
-  "How many police to deploy?",
+  "Who are the accused in FIR-20345?",
+  "How many murders in Mysuru in 2024?",
+  "Which station has the most chain snatching?",
+  "Is SUS-1001 connected to SUS-8286?",
+  "Which crimes are spiking?",
+  "What is this platform?",
 ];
 
 // Format text for realistic human voice synthesis with natural phonetics & pacing.
@@ -108,55 +111,141 @@ function getHumanVoice(langCode: string, preferredVoiceName?: string): SpeechSyn
   return voices[0] || null;
 }
 
-/* Animated listening orb — pulses while listening, spins while thinking, glows while speaking. */
-function VoiceOrb({ state }: { state: "idle" | "listening" | "thinking" | "speaking" }) {
-  const active = state === "listening" || state === "speaking";
-  const ring = state === "speaking" ? "#5b9bd5" : "#e7b43c";
+/* Minimal rich text for copilot replies: **bold**, "- " bullet lists, and every case
+ * number / offender id / officer id rendered as a link that opens the record. */
+const ENTITY_RE = /(\*\*[^*]+\*\*|\b\d{15,20}\b|\bSUS-\d{3,6}\b|\bKGID\d{4,8}\b)/g;
+
+function Inline({ text, onEntity, dark }: { text: string; onEntity: (id: string) => void; dark?: boolean }) {
+  const parts = text.split(ENTITY_RE);
   return (
-    <div className="relative grid h-24 w-24 place-items-center">
-      {/* expanding rings */}
-      {active &&
-        [0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="absolute rounded-full"
-            style={{ border: `1px solid ${ring}`, width: 56, height: 56 }}
-            initial={{ scale: 1, opacity: 0.55 }}
-            animate={{ scale: 2.1, opacity: 0 }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: "easeOut", delay: i * 0.7 }}
-          />
-        ))}
-      {/* thinking ring */}
-      {state === "thinking" && (
-        <motion.span
-          className="absolute h-[60px] w-[60px] rounded-full border-2 border-transparent"
-          style={{ borderTopColor: "#e7b43c", borderRightColor: "rgba(231,180,60,0.35)" }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
-        />
-      )}
-      {/* core */}
-      <motion.div
-        className="relative grid h-14 w-14 place-items-center rounded-full"
-        style={{
-          background:
-            state === "speaking"
-              ? "radial-gradient(circle at 30% 30%, #7fb4e0, #4a86c2)"
-              : "radial-gradient(circle at 30% 30%, #f5d486, #d29a1f)",
-          boxShadow: `0 0 26px -4px ${ring}`,
-        }}
-        animate={active ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-        transition={{ duration: 1.4, repeat: active ? Infinity : 0, ease: "easeInOut" }}
-      >
-        {state === "speaking" ? (
-          <AudioLines className="h-6 w-6 text-black/90" />
+    <>
+      {parts.map((p, i) => {
+        if (!p) return null;
+        if (p.startsWith("**") && p.endsWith("**"))
+          return (
+            <strong key={i} className={dark ? "font-semibold text-white" : "font-semibold text-ink"}>
+              {p.slice(2, -2)}
+            </strong>
+          );
+        if (/^(\d{15,20}|SUS-\d{3,6})$/.test(p))
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onEntity(p)}
+              title={`Open ${p}`}
+              className={`rounded px-1 font-mono text-[0.92em] transition-colors ${
+                dark ? "bg-white/10 text-[#f5d486] hover:bg-white/20" : "bg-brand/[0.08] text-brand-deep hover:bg-brand/15"
+              }`}
+            >
+              {p}
+            </button>
+          );
+        if (/^KGID\d+$/.test(p))
+          return (
+            <span key={i} className={`font-mono text-[0.92em] ${dark ? "text-white/80" : "text-ink/80"}`}>
+              {p}
+            </span>
+          );
+        return <span key={i}>{p}</span>;
+      })}
+    </>
+  );
+}
+
+function RichText({ text, onEntity, dark }: { text: string; onEntity: (id: string) => void; dark?: boolean }) {
+  const blocks: { kind: "p" | "ul"; lines: string[] }[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trimEnd();
+    if (!line.trim()) continue;
+    const bullet = /^\s*[-•*]\s+/.test(line);
+    const content = bullet ? line.replace(/^\s*[-•*]\s+/, "") : line;
+    const last = blocks[blocks.length - 1];
+    if (bullet && last?.kind === "ul") last.lines.push(content);
+    else blocks.push({ kind: bullet ? "ul" : "p", lines: [content] });
+  }
+  return (
+    <div className="space-y-1.5">
+      {blocks.map((b, i) =>
+        b.kind === "ul" ? (
+          <ul key={i} className="space-y-1">
+            {b.lines.map((l, j) => (
+              <li key={j} className="flex gap-2">
+                <span className={`mt-[0.55em] h-1 w-1 shrink-0 rounded-full ${dark ? "bg-[#f5d486]" : "bg-brand"}`} />
+                <span className="min-w-0">
+                  <Inline text={l} onEntity={onEntity} dark={dark} />
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : (
-          <Mic className="h-6 w-6 text-black/80" />
-        )}
-      </motion.div>
+          <p key={i}>
+            <Inline text={b.lines[0]} onEntity={onEntity} dark={dark} />
+          </p>
+        )
+      )}
     </div>
   );
 }
+
+function TraceStrip({ trace, mode, dark }: { trace?: AgentTraceStep[]; mode?: string; dark?: boolean }) {
+  if (!trace?.length && !mode) return null;
+  const engine = mode?.startsWith("llm:") ? `Llama reasoning · ${mode.slice(4)}` : mode === "deterministic" ? "Records engine" : null;
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+      {engine && (
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+            dark ? "bg-white/10 text-white/60" : "bg-black/[0.05] text-faint"
+          }`}
+        >
+          <Cpu className="h-3 w-3" /> {engine}
+        </span>
+      )}
+      {(trace || []).slice(0, 5).map((t, i) => (
+        <span
+          key={i}
+          title={t.detail}
+          className={`inline-flex max-w-[16rem] items-center gap-1 truncate rounded-full px-2 py-0.5 text-[10.5px] ${
+            dark ? "bg-white/[0.06] text-white/55" : "bg-azure/[0.07] text-azure"
+          }`}
+        >
+          <Database className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            {t.label}
+            {t.result && t.result !== "ok" ? ` · ${t.result}` : ""}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const THINKING_STEPS = ["Resolving names and case numbers…", "Reading the case files…", "Cross-checking the link graph…", "Verifying every identifier…"];
+
+function ThinkingLine({ dark }: { dark?: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((v) => (v + 1) % THINKING_STEPS.length), 900);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={i}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.25 }}
+        className={`text-[12.5px] ${dark ? "text-white/60" : "text-muted"}`}
+      >
+        {THINKING_STEPS[i]}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+type Turn = { id: number; role: "user" | "assistant"; text: string; trace?: AgentTraceStep[]; mode?: string };
 
 export default function AgentConsole() {
   const router = useRouter();
@@ -167,7 +256,13 @@ export default function AgentConsole() {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [lang, setLang] = useState<Lang>(LANGS[0]);
-  const [reply, setReply] = useState<{ text: string; action: string } | null>(null);
+  const [reply, setReply] = useState<{ text: string; action: string; trace?: AgentTraceStep[]; mode?: string } | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const turnId = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Voice amplitude shared by the mic analyser, the TTS word pulses and the wave.
+  const levelRef = useRef(0);
   const [suggestions, setSuggestions] = useState<AgentSuggestion[]>([]);
   const [speechOK, setSpeechOK] = useState(false);
 
@@ -344,6 +439,10 @@ export default function AgentConsole() {
       const targetLang = isEnglishText ? "en-IN" : (langRef.current?.code || "en-IN");
 
       const u = new SpeechSynthesisUtterance(clean);
+      // Each spoken word swells the wave, so it moves with the voice.
+      u.onboundary = () => {
+        levelRef.current = Math.max(levelRef.current, 0.55 + Math.random() * 0.45);
+      };
       u.rate = 0.96;
       u.pitch = 1.08;
       u.volume = 1.0;
@@ -395,6 +494,9 @@ export default function AgentConsole() {
             // Reliable Fallback: Create a clean utterance WITHOUT forcing a custom voice,
             // letting the browser engine use its robust default voice for the language.
             const fb = new SpeechSynthesisUtterance(clean);
+            fb.onboundary = () => {
+              levelRef.current = Math.max(levelRef.current, 0.55 + Math.random() * 0.45);
+            };
             fb.rate = 0.96;
             fb.pitch = 1.0;
             fb.volume = 1.0;
@@ -466,6 +568,8 @@ export default function AgentConsole() {
       setLastCommand(q);
       setReply(null);
       setSuggestions([]);
+      setPanelOpen(true);
+      setTurns((t) => [...t, { id: ++turnId.current, role: "user", text: q }]);
       try {
         // Unlock browser SpeechSynthesis audio context if needed
         if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -508,7 +612,8 @@ export default function AgentConsole() {
 
         historyRef.current.push({ role: "user", content: q });
         historyRef.current.push({ role: "assistant", content: r.reply });
-        setReply({ text: r.reply, action: r.action });
+        setReply({ text: r.reply, action: r.action, trace: r.trace, mode: r.mode });
+        setTurns((t) => [...t, { id: ++turnId.current, role: "assistant", text: r.reply, trace: r.trace, mode: r.mode }]);
         setSuggestions(r.suggestions?.slice(0, 3) ?? []);
         route(r);
         if (ttsRef.current) (r.grounding && r.grounding.grounded === false
@@ -516,10 +621,11 @@ export default function AgentConsole() {
             // invented statement more authority, not less, and the listener has no
             // way to see the caution text.
             ? speak("This answer could not be verified against the case records. Please read it on screen.")
-            : speak(r.reply));
+            : speak(r.speech || r.reply));
       } catch {
         const msg = "Could not process request. Please try again.";
         setReply({ text: msg, action: "answer" });
+        setTurns((t) => [...t, { id: ++turnId.current, role: "assistant", text: msg }]);
         if (ttsRef.current) speak(msg);
       } finally {
         busyRef.current = false;
@@ -751,7 +857,29 @@ export default function AgentConsole() {
     return () => window.removeEventListener("keydown", onKey);
   }, [stopVoice]);
 
-  const orbState: "idle" | "listening" | "thinking" | "speaking" = speaking
+  useMicLevel(voiceMode && listening && !speaking, levelRef);
+
+  const openEntity = useCallback(
+    (id: string) => {
+      if (/^SUS-/i.test(id)) router.push(`/suspect?id=${encodeURIComponent(id.toUpperCase())}`);
+      else router.push(`/case?id=${encodeURIComponent(id)}`);
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [turns, busy]);
+
+  const clearConversation = useCallback(() => {
+    historyRef.current = [];
+    setTurns([]);
+    setReply(null);
+    setSuggestions([]);
+  }, []);
+
+  const orbState: VoiceState = speaking
     ? "speaking"
     : busy
     ? "thinking"
@@ -769,49 +897,74 @@ export default function AgentConsole() {
     ? "Starting mic…"
     : "";
 
+  const chips = (dark: boolean) =>
+    suggestions.length > 0 &&
+    !busy && (
+      <div className={`mt-3 flex flex-wrap gap-1.5 ${dark ? "justify-center" : ""}`}>
+        {suggestions.map((s) => (
+          <button
+            key={s.query}
+            onClick={() => submit(s.query)}
+            disabled={busy}
+            className={`group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-all active:scale-95 disabled:opacity-40 ${
+              dark
+                ? "border border-white/15 bg-white/[0.06] text-white/85 hover:border-white/30 hover:bg-white/[0.12]"
+                : "border border-brand/25 bg-brand/[0.06] text-brand/90 hover:border-brand/50 hover:bg-brand/12 hover:text-brand"
+            }`}
+          >
+            {s.label}
+            <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+          </button>
+        ))}
+      </div>
+    );
+
   return (
     <div id="agent-console" className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-5">
-      <div className="w-full max-w-2xl">
-        {/* ---------------- Premium Voice HUD ---------------- */}
+      <AnimatePresence>{voiceMode && <EdgeGlow key="edge" state={orbState} />}</AnimatePresence>
+      <div className="relative z-50 w-full max-w-2xl">
+        {/* ---------------- Siri-style voice HUD ---------------- */}
         <AnimatePresence>
           {voiceMode && (
             <motion.div
               key="voice-hud"
-              initial={{ opacity: 0, y: 18, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.98 }}
-              transition={{ duration: 0.45, ease: [0.32, 0.72, 0, 1] }}
-              className="mb-3 overflow-hidden rounded-[1.8rem] border border-black/12 bg-[#ffffff]/97 shadow-[0_30px_80px_-24px_rgba(17,20,32,0.16)] backdrop-blur-2xl"
+              initial={{ opacity: 0, y: 24, scale: 0.96, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: 16, scale: 0.97, filter: "blur(4px)" }}
+              transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
+              className="mb-3 overflow-hidden rounded-[2rem] border border-white/10 bg-[#07070d]/95 text-white shadow-[0_40px_100px_-30px_rgba(60,40,140,0.65)] backdrop-blur-2xl"
             >
-              {/* animated top hairline */}
-              <div
-                className={`h-[2px] w-full ${
-                  orbState === "speaking"
-                    ? "bg-gradient-to-r from-transparent via-azure to-transparent"
-                    : "bg-gradient-to-r from-transparent via-brand to-transparent"
-                } ${orbState === "listening" || orbState === "speaking" ? "shimmer" : ""}`}
-              />
-              <div className="p-5">
-                {/* header row */}
+              {/* aurora backdrop */}
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[2rem]">
+                <motion.div
+                  className="absolute -left-1/4 -top-1/2 h-[140%] w-[150%] opacity-40"
+                  style={{
+                    background:
+                      "radial-gradient(40% 35% at 30% 60%, rgba(150,95,255,0.45), transparent 70%), radial-gradient(35% 30% at 70% 55%, rgba(47,140,255,0.4), transparent 70%), radial-gradient(30% 25% at 50% 75%, rgba(231,180,60,0.35), transparent 70%)",
+                  }}
+                  animate={{ rotate: orbState === "thinking" ? 360 : [0, 8, -6, 0] }}
+                  transition={
+                    orbState === "thinking"
+                      ? { duration: 6, repeat: Infinity, ease: "linear" }
+                      : { duration: 14, repeat: Infinity, ease: "easeInOut" }
+                  }
+                />
+              </div>
+              <div className="relative p-5">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span
-                        className={`absolute inline-flex h-full w-full rounded-full ${
-                          listening ? "animate-ping bg-brand" : "bg-faint"
-                        } opacity-75`}
-                      />
-                      <span className={`relative inline-flex h-2 w-2 rounded-full ${listening ? "bg-brand" : "bg-faint"}`} />
-                    </span>
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">Kavya Voice AI</span>
-                    {stateLabel && <span className="text-[11px] text-faint">· {stateLabel}</span>}
+                  <div className="flex items-center gap-2.5">
+                    <SiriOrb state={orbState} size={30} />
+                    <div className="leading-tight">
+                      <div className="text-[12px] font-semibold tracking-[0.18em] text-white/90">KAVYA</div>
+                      <div className="text-[11px] text-white/50">{stateLabel || "Voice assistant"}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => setTts((v) => !v)}
                       title={tts ? "Voice replies on" : "Voice replies off"}
                       className={`grid h-8 w-8 place-items-center rounded-full transition-colors ${
-                        tts ? "bg-brand/15 text-brand" : "bg-black/[0.04] text-faint hover:text-ink"
+                        tts ? "bg-white/15 text-white" : "bg-white/[0.06] text-white/50 hover:text-white"
                       }`}
                     >
                       {tts ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
@@ -820,30 +973,27 @@ export default function AgentConsole() {
                       <select
                         value={selectedVoiceName}
                         onChange={(e) => setSelectedVoiceName(e.target.value)}
-                        className="hidden max-w-[150px] rounded-full border border-black/10 bg-black/[0.04] px-2.5 py-1 text-[11px] font-semibold text-ink outline-none transition-all hover:bg-black/[0.08] sm:block cursor-pointer"
-                        title="Select Human Neural Voice"
+                        className="hidden max-w-[150px] cursor-pointer rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white/85 outline-none transition-all hover:bg-white/[0.12] sm:block"
+                        title="Select voice"
                       >
-                        <option value="">👩 Realistic Female (Auto)</option>
+                        <option value="" className="text-ink">Natural voice (auto)</option>
                         {availableVoices
-                          .filter((v) => {
-                            const prefix = (lang.code || "en").split("-")[0].toLowerCase();
-                            return v.lang.toLowerCase().startsWith(prefix);
-                          })
+                          .filter((v) => v.lang.toLowerCase().startsWith((lang.code || "en").split("-")[0].toLowerCase()))
                           .map((v) => (
-                            <option key={v.name} value={v.name}>
+                            <option key={v.name} value={v.name} className="text-ink">
                               {v.name.replace(/Microsoft|Google|Apple|Online|\(Natural\)/gi, "").trim()}
                             </option>
                           ))}
                       </select>
                     )}
-                    <div className="hidden items-center rounded-full bg-black/[0.04] p-0.5 sm:flex">
+                    <div className="hidden items-center rounded-full bg-white/[0.06] p-0.5 sm:flex">
                       {LANGS.map((l) => (
                         <button
                           key={l.code}
                           onClick={() => setLang(l)}
                           title={l.native}
                           className={`h-7 min-w-7 rounded-full px-2 text-[11.5px] font-semibold transition-all ${
-                            lang.code === l.code ? "bg-brand text-black" : "text-muted hover:text-ink"
+                            lang.code === l.code ? "bg-white text-black" : "text-white/60 hover:text-white"
                           }`}
                         >
                           {l.label}
@@ -853,114 +1003,138 @@ export default function AgentConsole() {
                     <button
                       onClick={stopVoice}
                       title="Turn voice off (Esc)"
-                      className="grid h-8 w-8 place-items-center rounded-full bg-black/[0.04] text-faint transition-colors hover:bg-crimson/15 hover:text-crimson"
+                      className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-white/60 transition-colors hover:bg-crimson/30 hover:text-white"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
 
-                {/* orb */}
-                <div className="mt-3 flex justify-center">
-                  <VoiceOrb state={orbState} />
-                </div>
-
                 {/* live transcript */}
-                <div className="mt-2 min-h-[2.5rem] px-2 text-center">
+                <div className="mt-4 min-h-[2.4rem] px-2 text-center">
                   {interim ? (
-                    <p className="text-[17px] font-medium leading-snug text-ink">
+                    <p className="text-[18px] font-medium leading-snug text-white">
                       {interim}
-                      <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-brand align-middle" />
+                      <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-white/80 align-middle" />
                     </p>
                   ) : lastCommand && (busy || speaking || reply) ? (
-                    <p className="text-[15px] leading-snug text-muted">“{lastCommand}”</p>
+                    <p className="text-[15px] leading-snug text-white/60">“{lastCommand}”</p>
                   ) : (
-                    <p className="text-[15px] text-faint">
-                      {listening ? "Listening… just speak your command" : "Warming up the microphone…"}
+                    <p className="text-[15px] text-white/45">
+                      {listening ? "Listening… ask about any case, person or district" : "Warming up the microphone…"}
                     </p>
                   )}
                 </div>
 
-                {/* reply */}
+                {/* the wave */}
+                <div className="-mx-5 mt-1">
+                  <SiriWave state={orbState} levelRef={levelRef} height={92} />
+                </div>
+
+                {busy && (
+                  <div className="mt-1 text-center">
+                    <ThinkingLine dark />
+                  </div>
+                )}
+
                 <AnimatePresence mode="wait">
                   {reply && !busy && (
                     <motion.div
                       key={reply.text}
-                      initial={{ opacity: 0, y: 6 }}
+                      initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="mt-3 flex items-start gap-2.5 rounded-2xl border border-black/[0.07] bg-black/[0.03] p-3.5"
+                      transition={{ duration: 0.35 }}
+                      className="kavya-scroll mt-2 max-h-[32vh] overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left text-[13.5px] leading-relaxed text-white/85"
                     >
-                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand/15 text-brand">
-                        <Sparkles className="h-3.5 w-3.5" />
-                      </span>
-                      <p className="text-[13.5px] leading-relaxed text-ink/90">{reply.text}</p>
+                      <RichText text={reply.text} onEntity={openEntity} dark />
+                      <TraceStrip trace={reply.trace} mode={reply.mode} dark />
                     </motion.div>
                   )}
                 </AnimatePresence>
-
-                {/* suggestion chips */}
-                {suggestions.length > 0 && !busy && (
-                  <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                    {suggestions.map((s) => (
-                      <button
-                        key={s.query}
-                        onClick={() => submit(s.query)}
-                        className="group inline-flex items-center gap-1 rounded-full border border-brand/25 bg-brand/[0.06] px-3 py-1.5 text-[11.5px] font-medium text-brand/90 transition-all hover:border-brand/50 hover:bg-brand/12 hover:text-brand active:scale-95"
-                      >
-                        {s.label}
-                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {chips(true)}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* ---------------- Reply ribbon (text mode) ---------------- */}
+        {/* ---------------- Conversation (text mode) ---------------- */}
         <AnimatePresence>
-          {reply && !voiceMode && (
+          {!voiceMode && turns.length > 0 && panelOpen && (
             <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              key="conversation"
+              initial={{ opacity: 0, y: 14, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
               transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-              className="mb-3 flex items-start gap-3 rounded-2xl border border-black/10 bg-[#ffffff]/97 p-4 shadow-[0_24px_60px_-20px_rgba(17,20,32,0.16)] backdrop-blur-xl"
+              className="mb-3 overflow-hidden rounded-[1.6rem] border border-black/10 bg-white/97 shadow-[0_28px_70px_-22px_rgba(17,20,32,0.22)] backdrop-blur-xl"
             >
-              <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand/15 text-brand">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13.5px] leading-relaxed text-ink/90">{reply.text}</p>
-                {suggestions.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {suggestions.map((s) => (
-                      <button
-                        key={s.query}
-                        onClick={() => submit(s.query)}
-                        disabled={busy}
-                        className="group inline-flex items-center gap-1 rounded-full border border-brand/25 bg-brand/[0.06] px-3 py-1.5 text-[11.5px] font-medium text-brand/90 transition-all hover:border-brand/50 hover:bg-brand/12 hover:text-brand active:scale-95 disabled:opacity-40"
-                      >
-                        {s.label}
-                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                      </button>
-                    ))}
+              <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <SiriOrb state={busy ? "thinking" : "idle"} size={24} />
+                  <span className="text-[12px] font-semibold tracking-[0.16em] text-ink">KAVYA</span>
+                  <span className="text-[11px] text-faint">investigative copilot</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={clearConversation}
+                    title="New conversation"
+                    aria-label="Start a new conversation"
+                    className="grid h-7 w-7 place-items-center rounded-full text-faint transition-colors hover:bg-black/[0.05] hover:text-ink"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPanelOpen(false)}
+                    title="Minimise"
+                    aria-label="Minimise the conversation"
+                    className="grid h-7 w-7 place-items-center rounded-full text-faint transition-colors hover:bg-black/[0.05] hover:text-ink"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div ref={scrollRef} className="kavya-scroll max-h-[46vh] space-y-3 overflow-y-auto px-4 py-3.5">
+                {turns.map((t) =>
+                  t.role === "user" ? (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex justify-end"
+                    >
+                      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-snug text-white">
+                        {t.text}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
+                      className="flex items-start gap-2.5"
+                    >
+                      <span className="mt-0.5">
+                        <SiriOrb state="idle" size={22} />
+                      </span>
+                      <div className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-ink/90">
+                        <RichText text={t.text} onEntity={openEntity} />
+                        <TraceStrip trace={t.trace} mode={t.mode} />
+                      </div>
+                    </motion.div>
+                  )
+                )}
+                {busy && (
+                  <div className="flex items-center gap-2.5">
+                    <SiriOrb state="thinking" size={22} />
+                    <ThinkingLine />
                   </div>
                 )}
+                {chips(false)}
               </div>
-              <button
-                type="button"
-                aria-label="Dismiss assistant reply"
-                onClick={() => {
-                  setReply(null);
-                  setSuggestions([]);
-                }}
-                className="text-faint transition-colors hover:text-ink"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -980,7 +1154,7 @@ export default function AgentConsole() {
           className="rounded-[1.6rem] border border-black/10 bg-[#ffffff]/97 p-2 shadow-[0_28px_70px_-20px_rgba(17,20,32,0.16)] backdrop-blur-xl"
         >
           <AnimatePresence>
-            {open && !voiceMode && (
+            {open && !voiceMode && turns.length === 0 && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
@@ -1010,35 +1184,54 @@ export default function AgentConsole() {
             }}
             className="flex items-center gap-2"
           >
-            {/* Voice toggle */}
+            {/* Voice toggle — the orb itself is the button */}
             <button
               type="button"
               onClick={toggleVoice}
               disabled={!speechOK}
               aria-pressed={voiceMode}
               aria-label={speechOK ? (voiceMode ? "Turn voice off" : "Turn voice on") : "Voice not supported in this browser"}
-              title={speechOK ? (voiceMode ? "Turn voice off" : "Turn voice on — always listening") : "Voice not supported in this browser"}
-              className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-full transition-all duration-300 active:scale-95 ${
-                voiceMode
-                  ? "bg-gradient-to-b from-brand-soft to-brand text-black pulse-ring"
-                  : "bg-black/[0.04] text-muted hover:bg-black/[0.08] hover:text-ink disabled:opacity-40"
-              }`}
+              title={speechOK ? (voiceMode ? "Turn voice off" : "Talk to Kavya — always listening") : "Voice not supported in this browser"}
+              className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 disabled:opacity-40"
             >
-              {speechOK ? <Mic className="h-[18px] w-[18px]" /> : <MicOff className="h-[18px] w-[18px]" />}
+              {speechOK ? (
+                <span className="relative grid place-items-center">
+                  <SiriOrb state={voiceMode ? orbState : busy ? "thinking" : "idle"} size={42} />
+                  {!voiceMode && <Mic className="absolute h-[17px] w-[17px] text-white drop-shadow" />}
+                </span>
+              ) : (
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-black/[0.04] text-muted">
+                  <MicOff className="h-[18px] w-[18px]" />
+                </span>
+              )}
             </button>
 
             <input
               ref={inputRef}
               value={input}
-              onFocus={() => setOpen(true)}
+              onFocus={() => {
+                setOpen(true);
+                setPanelOpen(true);
+              }}
               onChange={(e) => setInput(e.target.value)}
               placeholder={
-                voiceMode ? "Kavya is listening — speak your command or type here…" : "Ask Kavya AI — “open FIR-20345”, “ai suspect matching”, “show heatmap”…"
+                voiceMode
+                  ? "Kavya is listening — speak, or type here…"
+                  : "Ask Kavya anything — a case, a person, a district, a trend…"
               }
               className="min-w-0 flex-1 bg-transparent px-2 text-[14px] text-ink placeholder:text-faint focus:outline-none"
             />
 
-            {/* Language toggle (text mode) */}
+            {!voiceMode && turns.length > 0 && !panelOpen && (
+              <button
+                type="button"
+                onClick={() => setPanelOpen(true)}
+                className="hidden rounded-full bg-black/[0.04] px-2.5 py-1 text-[11px] font-semibold text-muted transition-colors hover:text-ink sm:block"
+              >
+                {Math.ceil(turns.length / 2)} msg
+              </button>
+            )}
+
             {!voiceMode && (
               <div className="hidden items-center rounded-full bg-black/[0.04] p-0.5 sm:flex">
                 {LANGS.map((l) => (
@@ -1079,14 +1272,8 @@ export default function AgentConsole() {
         </motion.div>
 
         <p className="mt-2 hidden text-center text-[10.5px] tracking-wide text-faint sm:block">
-          <kbd className="rounded bg-black/5 px-1.5 py-0.5 font-sans">⌘K</kbd> to command ·{" "}
-          {speechOK ? (
-            <>
-              <Mic className="inline h-3 w-3" /> tap to talk hands-free
-            </>
-          ) : (
-            "Llama-3.3 70B · EN / ಕನ್ನಡ"
-          )}
+          <kbd className="rounded bg-black/5 px-1.5 py-0.5 font-sans">⌘K</kbd> to ask ·{" "}
+          {speechOK ? "tap the orb to talk hands-free" : "EN / ಕನ್ನಡ"} · every case and person id is verified against the records
         </p>
       </div>
     </div>

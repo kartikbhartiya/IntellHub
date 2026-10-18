@@ -62,6 +62,12 @@ export interface AgentResult {
   reply: string;
   suggestions?: AgentSuggestion[];
   transcript?: string;
+  /** Short spoken form of `reply` — the first sentence or two, without markup. */
+  speech?: string;
+  /** Records the copilot read to produce this answer, in order. */
+  trace?: AgentTraceStep[];
+  /** "llm:<provider>" when a language model answered, "deterministic" otherwise. */
+  mode?: string;
   /** Identifier verification performed server-side. `grounded: false` means the
    *  answer named a case, offender or officer that is not in the corpus. */
   grounding?: {
@@ -70,6 +76,13 @@ export interface AgentResult {
     unknown: { kind: string; value: string }[];
     grounded: boolean;
   };
+}
+
+export interface AgentTraceStep {
+  tool: string;
+  label: string;
+  detail: string;
+  result: string;
 }
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
