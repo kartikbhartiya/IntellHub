@@ -4,9 +4,9 @@
  *
  * Reads GET /analytics/temporal (appsail/temporal.py). Two choices worth stating:
  *
- * - The colour scale runs from zero, not from the quietest cell. On a near-even
- *   grid a min-to-max scale paints noise as a pattern — a 15-vs-30 spread becomes
- *   white-vs-red. From zero, an even grid reads as an even grid.
+ * - Colour is relative to an even spread (pale = as expected, warm = above, cool =
+ *   below), never min-to-max: on a near-even grid a min-to-max scale paints noise
+ *   as a pattern, and a scale from zero paints every cell the same dark colour.
  * - The verdict is on the card, not in a tooltip. The server tests the grid against
  *   an even spread and only outlines a cell as hot when it clears a correction for
  *   168 comparisons; the busiest cell is always shown, and the note says whether it
@@ -40,12 +40,20 @@ type Temporal = {
   note: string;
 };
 
-// Light amber to deep red; index 0 is "no FIRs".
-const RAMP = ["#f6f4ef", "#fdecc8", "#f9d48a", "#f2ae4f", "#e5812e", "#cc5320", "#a12a17"];
+// Coloured against an even spread, not against the quietest cell. A count scale from
+// zero painted an even grid uniformly dark; a min-to-max scale paints noise as a
+// pattern. Relative to "expected": pale is as expected, warm above, cool below.
+const BELOW = ["#3f6fb5", "#7fa3d4", "#c3d4ec"];
+const EVEN = "#f4efe6";
+const ABOVE = ["#f6d49a", "#ee9b4f", "#d4561f", "#a12a17"];
+const STEPS = [0.6, 0.8, 0.92, 1.08, 1.2, 1.4, 1.7]; // ratio cut points
+const RAMP = [...BELOW, EVEN, ...ABOVE];
 
-function colour(v: number, max: number) {
-  if (v <= 0 || max <= 0) return RAMP[0];
-  const i = Math.min(RAMP.length - 1, 1 + Math.floor((v / max) * (RAMP.length - 1 - 1e-9)));
+function colour(v: number, expected: number) {
+  if (expected <= 0) return EVEN;
+  const r = v / expected;
+  let i = STEPS.findIndex((cut) => r < cut);
+  if (i === -1) i = RAMP.length - 1;
   return RAMP[i];
 }
 
@@ -159,7 +167,7 @@ export default function TemporalHeatmap({ initialDistrict = "" }: { initialDistr
                           className={`aspect-square w-full rounded-[4px] transition-transform ${
                             active ? "scale-110 ring-2 ring-ink/70" : ""
                           } ${isHot ? "ring-2 ring-crimson" : ""}`}
-                          style={{ background: colour(v, data.max_cell) }}
+                          style={{ background: colour(v, data.expected_per_cell) }}
                         />
                       );
                     })}
@@ -171,13 +179,13 @@ export default function TemporalHeatmap({ initialDistrict = "" }: { initialDistr
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-[11px] text-faint">
-              <span>0</span>
+              <span>below</span>
               <div className="flex">
                 {RAMP.map((c) => (
-                  <span key={c} className="h-2.5 w-6 first:rounded-l last:rounded-r" style={{ background: c }} />
+                  <span key={c} className="h-2.5 w-5 first:rounded-l last:rounded-r" style={{ background: c }} />
                 ))}
               </div>
-              <span className="tabular">{data.max_cell} FIRs / hour-slot</span>
+              <span>above an even spread ({data.expected_per_cell.toFixed(1)} / slot · max {data.max_cell})</span>
               {data.hot_cells.length > 0 && (
                 <span className="ml-2 flex items-center gap-1">
                   <span className="h-2.5 w-2.5 rounded-[3px] ring-2 ring-crimson" /> hot beyond chance
