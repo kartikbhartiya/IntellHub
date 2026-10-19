@@ -119,7 +119,7 @@ KNOWN_ACTIONS = {
     "open_case", "open_suspect", "show_heatmap", "show_network", "show_dispatch",
     "show_anomalies", "show_analytics", "recent_cases", "show_registry",
     "show_suspects", "open_copilot", "guide", "answer", "investigate",
-    "show_lifecycle", "show_pendency", "show_models", "show_map",
+    "show_lifecycle", "show_pendency", "show_models", "show_map", "show_surveillance",
 }
 
 

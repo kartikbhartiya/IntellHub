@@ -3,8 +3,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Mic, MicOff, Send, Sparkles, X, ArrowRight, Volume2, VolumeX, AudioLines } from "lucide-react";
-import { askAgent, AgentResult, AgentSuggestion, ChatTurn, ApiError } from "@/lib/api";
+import { Mic, MicOff, Send, X, ArrowRight, Volume2, VolumeX, RotateCcw, ChevronDown, Pause, Play, Square } from "lucide-react";
+import { askAgent, AgentResult, AgentSuggestion, AgentTraceStep, ChatTurn, ApiError } from "@/lib/api";
+import { SiriWave, SiriOrb, EdgeGlow, useMicLevel, VoiceState } from "./SiriVisual";
+import { RichText, TraceStrip } from "./RichText";
 
 type Lang = { code: string; label: string; native: string };
 const LANGS: Lang[] = [
@@ -13,10 +15,12 @@ const LANGS: Lang[] = [
 ];
 
 const SUGGESTIONS = [
-  "Show suspects linked to homicide",
-  "Show heatmap of Bengaluru Urban",
-  "Criminal links of FIR-20345",
-  "How many police to deploy?",
+  "Who are the accused in FIR-20345?",
+  "How many murders in Mysuru in 2024?",
+  "Which station has the most chain snatching?",
+  "Is SUS-1001 connected to SUS-8286?",
+  "Which crimes are spiking?",
+  "What is this platform?",
 ];
 
 // Format text for realistic human voice synthesis with natural phonetics & pacing.
@@ -108,53 +112,63 @@ function getHumanVoice(langCode: string, preferredVoiceName?: string): SpeechSyn
   return voices[0] || null;
 }
 
-/* Animated listening orb — pulses while listening, spins while thinking, glows while speaking. */
-function VoiceOrb({ state }: { state: "idle" | "listening" | "thinking" | "speaking" }) {
-  const active = state === "listening" || state === "speaking";
-  const ring = state === "speaking" ? "#5b9bd5" : "#e7b43c";
+const THINKING_STEPS = ["Resolving names and case numbers…", "Reading the case files…", "Cross-checking the link graph…", "Verifying every identifier…"];
+
+function ThinkingLine({ dark }: { dark?: boolean }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((v) => (v + 1) % THINKING_STEPS.length), 900);
+    return () => clearInterval(t);
+  }, []);
   return (
-    <div className="relative grid h-24 w-24 place-items-center">
-      {/* expanding rings */}
-      {active &&
-        [0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            className="absolute rounded-full"
-            style={{ border: `1px solid ${ring}`, width: 56, height: 56 }}
-            initial={{ scale: 1, opacity: 0.55 }}
-            animate={{ scale: 2.1, opacity: 0 }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: "easeOut", delay: i * 0.7 }}
-          />
-        ))}
-      {/* thinking ring */}
-      {state === "thinking" && (
-        <motion.span
-          className="absolute h-[60px] w-[60px] rounded-full border-2 border-transparent"
-          style={{ borderTopColor: "#e7b43c", borderRightColor: "rgba(231,180,60,0.35)" }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
-        />
-      )}
-      {/* core */}
-      <motion.div
-        className="relative grid h-14 w-14 place-items-center rounded-full"
-        style={{
-          background:
-            state === "speaking"
-              ? "radial-gradient(circle at 30% 30%, #7fb4e0, #4a86c2)"
-              : "radial-gradient(circle at 30% 30%, #f5d486, #d29a1f)",
-          boxShadow: `0 0 26px -4px ${ring}`,
-        }}
-        animate={active ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-        transition={{ duration: 1.4, repeat: active ? Infinity : 0, ease: "easeInOut" }}
+    <AnimatePresence mode="wait">
+      <motion.span
+        key={i}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.25 }}
+        className={`text-[12.5px] ${dark ? "text-white/60" : "text-muted"}`}
       >
-        {state === "speaking" ? (
-          <AudioLines className="h-6 w-6 text-black/90" />
-        ) : (
-          <Mic className="h-6 w-6 text-black/80" />
-        )}
-      </motion.div>
-    </div>
+        {THINKING_STEPS[i]}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
+type Turn = { id: number; role: "user" | "assistant"; text: string; trace?: AgentTraceStep[]; mode?: string };
+
+// Why the mic is paused. Kept apart from a plain boolean so that coming back to the
+// tab only undoes a pause the tab caused — never one the officer chose.
+type PauseReason = "manual" | "hidden" | null;
+
+// Push-to-talk lifecycle. "starting" = start() called, onstart not yet seen;
+// "live" = capturing; "ending" = released, waiting for the final result + onend.
+type PttPhase = "idle" | "starting" | "live" | "ending";
+
+// The mute choice survives reloads. It is a per-viewer convenience (which device is
+// in a quiet room), so browser storage is the right home for it, and every access is
+// guarded: private windows and blocked storage throw.
+const TTS_PREF_KEY = "kavya.voiceReplies";
+
+// Holding the dock orb this long turns a tap (toggle hands-free) into push-to-talk.
+// Short enough to feel immediate, long enough that a quick tap is never mistaken.
+const PTT_HOLD_MS = 320;
+
+// After the officer cuts Kavya off, cancel() silences the speaker at once, so the long
+// 1 s post-speech tail the natural end-of-speech path waits out is not needed. The
+// mic comes back after this shorter gap, and the existing 1.2 s echo window is
+// back-dated to end at the same moment, so nothing said after the gap is discarded.
+const INTERRUPT_RESUME_MS = 450;
+const ECHO_WINDOW_MS = 1200;
+
+// Space is the push-to-talk key only when it would not otherwise do something:
+// typing, pressing a focused button, toggling a checkbox, moving a slider.
+function isInteractiveTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof Element)) return false;
+  return !!el.closest(
+    'input, textarea, select, button, a[href], summary, [contenteditable=""], [contenteditable="true"], ' +
+      '[role="button"], [role="textbox"], [role="slider"], [role="checkbox"], [role="switch"], [role="tab"], [role="menuitem"], [role="option"]'
   );
 }
 
@@ -167,7 +181,13 @@ export default function AgentConsole() {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [lang, setLang] = useState<Lang>(LANGS[0]);
-  const [reply, setReply] = useState<{ text: string; action: string } | null>(null);
+  const [reply, setReply] = useState<{ text: string; action: string; trace?: AgentTraceStep[]; mode?: string } | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const turnId = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Voice amplitude shared by the mic analyser, the TTS word pulses and the wave.
+  const levelRef = useRef(0);
   const [suggestions, setSuggestions] = useState<AgentSuggestion[]>([]);
   const [speechOK, setSpeechOK] = useState(false);
 
@@ -184,6 +204,33 @@ export default function AgentConsole() {
   const inputRef = useRef<HTMLInputElement>(null);
   const recogRef = useRef<any>(null);
   const historyRef = useRef<ChatTurn[]>([]);
+  // Wraps every piece of assistant UI (voice HUD, conversation, push-to-talk pill,
+  // dock, hint line) so a pointerdown anywhere else can be read as "dismiss".
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Mic pause (voice mode stays on; recognition is stopped and NOT auto-restarted).
+  const [pauseReason, setPauseReasonState] = useState<PauseReason>(null);
+  const pauseRef = useRef<PauseReason>(null);
+  const micPaused = pauseReason !== null;
+  // Set when WE stop the recogniser (pause), so its onend is not mistaken for the
+  // mic dying instantly — that streak counter turns voice off after five.
+  const deliberateStopRef = useRef(false);
+
+  // Push-to-talk: a one-shot capture on the same recognition instance, sent on release.
+  const [ptt, setPtt] = useState(false);
+  const pttPhaseRef = useRef<PttPhase>("idle");
+  const pttSourceRef = useRef<"pointer" | "key" | null>(null);
+  const pttFinalRef = useRef("");
+  const pttInterimRef = useRef("");
+  const pttEndTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const suppressClickRef = useRef(false);
+  const [hint, setHint] = useState("");
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Set when the officer dismisses Kavya while an answer is still in flight, so that
+  // answer is shown when it lands but not read aloud into a room they walked away from.
+  const suppressSpeechRef = useRef(false);
 
   // Load available SpeechSynthesis voices dynamically and bind best female voice
   useEffect(() => {
@@ -230,6 +277,30 @@ export default function AgentConsole() {
   // results are discarded so the AI never hears its own voice from the speakers.
   const ttsEndedAt = useRef(0);
 
+  const setPauseReason = useCallback((r: PauseReason) => {
+    pauseRef.current = r;
+    setPauseReasonState(r);
+  }, []);
+
+  const flashHint = useCallback((text: string) => {
+    clearTimeout(hintTimer.current);
+    setHint(text);
+    hintTimer.current = setTimeout(() => setHint(""), 2800);
+  }, []);
+
+  // Restore the persisted mute choice after mount (storage is not readable during
+  // the static-export prerender, so it cannot seed useState directly).
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(TTS_PREF_KEY) === "off") {
+        ttsRef.current = false;
+        setTts(false);
+      }
+    } catch {
+      /* storage blocked — replies stay on, which is the default */
+    }
+  }, []);
+
   useEffect(() => {
     const SR =
       (typeof window !== "undefined" &&
@@ -251,6 +322,8 @@ export default function AgentConsole() {
           break;
         case "show_heatmap":
           if (p.district) qs.set("district", p.district);
+          if (p.crime_type) qs.set("crime_type", p.crime_type);
+          if (p.mode) qs.set("mode", p.mode);
           if (p.time_of_day) qs.set("time_of_day", p.time_of_day);
           if (p.case_id) qs.set("case_id", p.case_id);
           router.push(`/map${qs.toString() ? `?${qs}` : ""}`);
@@ -267,7 +340,7 @@ export default function AgentConsole() {
           router.push(`/dispatch${qs.toString() ? `?${qs}` : ""}`);
           break;
         case "show_anomalies":
-          router.push("/?view=anomalies#anomalies");
+          router.push("/overview#anomalies");
           break;
         case "show_analytics":
           router.push("/analytics");
@@ -279,9 +352,14 @@ export default function AgentConsole() {
         case "show_models":
           router.push("/analytics");
           break;
+        case "show_surveillance":
+          if (p.district) qs.set("district", p.district);
+          router.push(`/surveillance${qs.toString() ? `?${qs}` : ""}`);
+          break;
         case "recent_cases":
           if (p.district) qs.set("district", p.district);
           if (p.crime_type) qs.set("crime_type", p.crime_type);
+          if (p.sort) qs.set("sort", p.sort);
           if (p.q) qs.set("q", p.q);
           router.push(`/cases${qs.toString() ? `?${qs}` : ""}`);
           break;
@@ -304,7 +382,7 @@ export default function AgentConsole() {
           break;
         }
         case "open_copilot":
-          router.push("/analytics");
+          router.push("/copilot");
           break;
       }
     },
@@ -344,6 +422,10 @@ export default function AgentConsole() {
       const targetLang = isEnglishText ? "en-IN" : (langRef.current?.code || "en-IN");
 
       const u = new SpeechSynthesisUtterance(clean);
+      // Each spoken word swells the wave, so it moves with the voice.
+      u.onboundary = () => {
+        levelRef.current = Math.max(levelRef.current, 0.55 + Math.random() * 0.45);
+      };
       u.rate = 0.96;
       u.pitch = 1.08;
       u.volume = 1.0;
@@ -395,6 +477,9 @@ export default function AgentConsole() {
             // Reliable Fallback: Create a clean utterance WITHOUT forcing a custom voice,
             // letting the browser engine use its robust default voice for the language.
             const fb = new SpeechSynthesisUtterance(clean);
+            fb.onboundary = () => {
+              levelRef.current = Math.max(levelRef.current, 0.55 + Math.random() * 0.45);
+            };
             fb.rate = 0.96;
             fb.pitch = 1.0;
             fb.volume = 1.0;
@@ -429,6 +514,9 @@ export default function AgentConsole() {
       };
 
       setTimeout(() => {
+        // Cut off (Stop speaking / dismiss / voice off) inside this 50 ms gap:
+        // starting the utterance now would talk over the officer's own decision.
+        if (!speakingRef.current) return;
         try {
           if (synth.paused) synth.resume();
           synth.speak(u);
@@ -455,17 +543,43 @@ export default function AgentConsole() {
     }
   }, [selectedVoiceName]);
 
+  // Cut Kavya off mid-sentence and, in voice mode, go back to listening.
+  // In Chrome/Edge cancel() surfaces as onerror("interrupted"), a path in speak()
+  // that deliberately does NOT restart the mic, so the restart is scheduled here.
+  // Engines that report onend instead run speak()'s done(), which schedules its own
+  // (1 s) restart; safeStart's running guard makes the second call a no-op.
+  const stopSpeaking = useCallback((resumeListening: boolean = true) => {
+    clearTimeout(ttsWatchdog.current);
+    clearInterval(ttsKeepAlive.current);
+    const wasSpeaking = speakingRef.current;
+    speakingRef.current = false;
+    setSpeaking(false);
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      /* ignore */
+    }
+    if (!wasSpeaking) return;
+    ttsEndedAt.current = Date.now() - (ECHO_WINDOW_MS - INTERRUPT_RESUME_MS);
+    if (resumeListening && voiceRef.current) {
+      setTimeout(() => beginRecognitionRef.current(), INTERRUPT_RESUME_MS);
+    }
+  }, []);
+
   const submit = useCallback(
     async (text: string) => {
       const q = text.trim();
       if (!q || busyRef.current) return;
       busyRef.current = true; // set synchronously so rapid speech-finals can't double-submit
+      suppressSpeechRef.current = false; // a new question re-engages Kavya
       setBusy(true);
       setInput("");
       setInterim("");
       setLastCommand(q);
       setReply(null);
       setSuggestions([]);
+      setPanelOpen(true);
+      setTurns((t) => [...t, { id: ++turnId.current, role: "user", text: q }]);
       try {
         // Unlock browser SpeechSynthesis audio context if needed
         if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -508,19 +622,21 @@ export default function AgentConsole() {
 
         historyRef.current.push({ role: "user", content: q });
         historyRef.current.push({ role: "assistant", content: r.reply });
-        setReply({ text: r.reply, action: r.action });
+        setReply({ text: r.reply, action: r.action, trace: r.trace, mode: r.mode });
+        setTurns((t) => [...t, { id: ++turnId.current, role: "assistant", text: r.reply, trace: r.trace, mode: r.mode }]);
         setSuggestions(r.suggestions?.slice(0, 3) ?? []);
         route(r);
-        if (ttsRef.current) (r.grounding && r.grounding.grounded === false
+        if (ttsRef.current && !suppressSpeechRef.current) (r.grounding && r.grounding.grounded === false
             // An unverified answer is not read aloud. Synthesised speech lends an
             // invented statement more authority, not less, and the listener has no
             // way to see the caution text.
             ? speak("This answer could not be verified against the case records. Please read it on screen.")
-            : speak(r.reply));
+            : speak(r.speech || r.reply));
       } catch {
         const msg = "Could not process request. Please try again.";
         setReply({ text: msg, action: "answer" });
-        if (ttsRef.current) speak(msg);
+        setTurns((t) => [...t, { id: ++turnId.current, role: "assistant", text: msg }]);
+        if (ttsRef.current && !suppressSpeechRef.current) speak(msg);
       } finally {
         busyRef.current = false;
         setBusy(false);
@@ -540,6 +656,10 @@ export default function AgentConsole() {
   const safeStartRef = useRef<() => void>(() => {});
   const submitRef = useRef(submit);
   submitRef.current = submit;
+  // finishPtt is defined after ensureRecog (it needs safeStart); the long-lived
+  // onend handler reaches it through this ref.
+  const finishPttRef = useRef<() => void>(() => {});
+  const pttRetriedRef = useRef(false);
 
   const ensureRecog = useCallback(() => {
     if (recogRef.current) return recogRef.current;
@@ -559,13 +679,45 @@ export default function AgentConsole() {
       runningRef.current = true;
       listeningStartedAt.current = Date.now();
       lastStartAt.current = Date.now();
+      if (pttPhaseRef.current === "starting") pttPhaseRef.current = "live";
       setListening(true);
       setVoiceNote("");
     };
     recog.onend = () => {
       runningRef.current = false;
       setListening(false);
-      if (!voiceRef.current || speakingRef.current) return;
+      const deliberate = deliberateStopRef.current;
+      deliberateStopRef.current = false;
+
+      // Push-to-talk owns this session: its end is the "send", never a restart.
+      if (pttPhaseRef.current === "live" || pttPhaseRef.current === "ending") {
+        finishPttRef.current();
+        return;
+      }
+      // A stale end from the session paused just before push-to-talk began:
+      // the capture the officer is holding for has not started yet — start it.
+      // Retried once only: a mic that refuses to start must not spin here.
+      if (pttPhaseRef.current === "starting") {
+        if (pttRetriedRef.current) finishPttRef.current();
+        else {
+          pttRetriedRef.current = true;
+          safeStartRef.current();
+        }
+        return;
+      }
+
+      // Paused: the whole point is that the mic stays off until Resume.
+      if (!voiceRef.current || speakingRef.current || pauseRef.current) return;
+
+      // We stopped it ourselves and the officer has already resumed — restart
+      // cleanly without counting this as the mic failing.
+      if (deliberate) {
+        quickEndsRef.current = 0;
+        listeningStartedAt.current = 0;
+        clearTimeout(restartTimer.current);
+        restartTimer.current = setTimeout(() => safeStartRef.current(), 150);
+        return;
+      }
 
       // Don't restart if we're inside the post-TTS cooldown window —
       // the done() callback in speak() will handle the restart after the delay.
@@ -599,6 +751,9 @@ export default function AgentConsole() {
       restartTimer.current = setTimeout(() => safeStartRef.current(), 150);
     };
     recog.onerror = (e: any) => {
+      const fatal = ["not-allowed", "service-not-allowed", "audio-capture"].includes(e?.error);
+      // A refused mic ends push-to-talk on the coming onend instead of retrying it.
+      if (fatal && pttPhaseRef.current !== "idle") pttPhaseRef.current = "ending";
       if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
         voiceRef.current = false;
         setVoiceMode(false);
@@ -612,6 +767,27 @@ export default function AgentConsole() {
     };
     recog.onresult = (ev: any) => {
       quickEndsRef.current = 0; // Got a result, microphone is capturing audio successfully
+
+      // Push-to-talk: collect everything said while held and send it once, on
+      // release. The post-speech echo window is skipped here because the officer
+      // is holding the control — the capture window is theirs, not ambient.
+      if (pttPhaseRef.current !== "idle") {
+        if (speakingRef.current) return;
+        let pttInterim = "";
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          const res = ev.results[i];
+          if (res.isFinal) pttFinalRef.current += res[0].transcript + " ";
+          else pttInterim += res[0].transcript;
+        }
+        pttInterimRef.current = pttInterim;
+        setInterim((pttFinalRef.current + pttInterim).trim());
+        return;
+      }
+
+      // A result that was in flight when the officer pressed Pause — or turned voice
+      // off / clicked away (stopVoice uses stop(), which still delivers a final) —
+      // is dropped: "paused" and "off" must mean nothing more gets sent.
+      if (pauseRef.current || !voiceRef.current) return;
 
       // Discard ALL results during TTS and within 1.2 s after TTS ends.
       // This prevents the mic from picking up the laptop speaker playing
@@ -638,7 +814,11 @@ export default function AgentConsole() {
   }, []);
 
   const safeStart = useCallback(() => {
-    if (!voiceRef.current || speakingRef.current || runningRef.current) return;
+    if (speakingRef.current || runningRef.current) return;
+    // Push-to-talk may start the mic with voice mode off or paused; everything
+    // else (onend restarts, post-speech restarts, language switches) may not.
+    const forPtt = pttPhaseRef.current === "starting";
+    if (!forPtt && (!voiceRef.current || pauseRef.current)) return;
     const recog = ensureRecog();
     if (!recog) return;
     recog.lang = langRef.current.code;
@@ -654,9 +834,180 @@ export default function AgentConsole() {
   safeStartRef.current = safeStart;
   beginRecognitionRef.current = safeStart;
 
+  // --- Push-to-talk. Only ever runs where it cannot fight always-listening: with
+  // voice mode off, or with voice mode on but the mic paused. It borrows the SAME
+  // recognition instance (never a second one) and is told apart by pttPhaseRef. ---
+  const cancelPtt = useCallback(() => {
+    if (pttPhaseRef.current === "idle") return;
+    clearTimeout(pttEndTimer.current);
+    pttPhaseRef.current = "idle";
+    pttSourceRef.current = null;
+    pttFinalRef.current = "";
+    pttInterimRef.current = "";
+    setPtt(false);
+    setInterim("");
+    try {
+      recogRef.current?.abort?.();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const beginPtt = useCallback(
+    (source: "pointer" | "key"): boolean => {
+      if (pttPhaseRef.current !== "idle") return false;
+      if (voiceRef.current && !pauseRef.current) return false; // already listening hands-free
+      const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+      if (!w.SpeechRecognition && !w.webkitSpeechRecognition) return false;
+      // Talking over Kavya means "my turn": cut her off without the auto-restart.
+      if (speakingRef.current) stopSpeaking(false);
+      clearTimeout(pttEndTimer.current);
+      clearTimeout(restartTimer.current);
+      pttSourceRef.current = source;
+      pttFinalRef.current = "";
+      pttInterimRef.current = "";
+      pttRetriedRef.current = false;
+      pttPhaseRef.current = "starting";
+      setPtt(true);
+      setInterim("");
+      setHint("");
+      if (runningRef.current) {
+        // The session paused a moment ago is still winding down; its onend
+        // (seeing phase "starting") starts this capture.
+        try {
+          recogRef.current?.abort?.();
+        } catch {
+          /* ignore */
+        }
+        return true;
+      }
+      safeStart();
+      return true;
+    },
+    [safeStart, stopSpeaking]
+  );
+
+  const endPtt = useCallback(() => {
+    const phase = pttPhaseRef.current;
+    if (phase === "idle" || phase === "ending") return;
+    pttPhaseRef.current = "ending";
+    // stop() (not abort) so the engine turns what it heard into a final result.
+    try {
+      recogRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    // An engine that never reports onend (start() itself failed) must not leave
+    // the "listening" pill stuck on screen.
+    clearTimeout(pttEndTimer.current);
+    pttEndTimer.current = setTimeout(() => {
+      if (pttPhaseRef.current !== "ending") return;
+      try {
+        recogRef.current?.abort?.();
+      } catch {
+        /* ignore */
+      }
+      runningRef.current = false;
+      finishPttRef.current();
+    }, 2500);
+  }, []);
+
+  const finishPtt = useCallback(() => {
+    if (pttPhaseRef.current === "idle") return;
+    clearTimeout(pttEndTimer.current);
+    pttPhaseRef.current = "idle";
+    pttSourceRef.current = null;
+    setPtt(false);
+    setInterim("");
+    // stop() normally finalises the last phrase; if this engine did not, send what
+    // the officer saw on screen rather than silently dropping it.
+    const text = (pttFinalRef.current + pttInterimRef.current).trim();
+    pttFinalRef.current = "";
+    pttInterimRef.current = "";
+    if (text.length <= 1) flashHint("Didn't catch that. Hold, speak, then release.");
+    else if (busyRef.current) flashHint("Kavya is still answering the last question. Try again in a moment.");
+    else submitRef.current(text);
+    // Resumed while holding: hand the mic back to always-listening.
+    if (voiceRef.current && !pauseRef.current) {
+      clearTimeout(restartTimer.current);
+      restartTimer.current = setTimeout(() => safeStartRef.current(), 150);
+    }
+  }, [flashHint]);
+  useEffect(() => {
+    finishPttRef.current = finishPtt;
+  }, [finishPtt]);
+
+  // --- Mic pause / resume. Voice mode stays on; only recognition stops. ---
+  const pauseMic = useCallback(
+    (reason: Exclude<PauseReason, null>) => {
+      if (!voiceRef.current) return;
+      // A manual pause is never downgraded to a background one, or coming back to
+      // the tab would un-pause a mic the officer deliberately switched off.
+      if (pauseRef.current === "manual" || pauseRef.current === reason) return;
+      setPauseReason(reason);
+      clearTimeout(restartTimer.current);
+      setInterim("");
+      setListening(false);
+      if (runningRef.current) {
+        deliberateStopRef.current = true;
+        try {
+          // abort(), not stop(): a half-heard phrase must not be sent after Pause.
+          if (recogRef.current?.abort) recogRef.current.abort();
+          else recogRef.current?.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [setPauseReason]
+  );
+
+  const resumeMic = useCallback(() => {
+    if (!voiceRef.current || !pauseRef.current) return;
+    setPauseReason(null);
+    quickEndsRef.current = 0;
+    listeningStartedAt.current = 0;
+    // Same instance via ensureRecog. If the paused session's onend has not landed
+    // yet, safeStart is a no-op and that onend (deliberateStopRef) restarts instead.
+    // While Kavya is speaking, speak()'s done() does the restart, as before.
+    safeStart();
+  }, [safeStart, setPauseReason]);
+
+  const toggleMicPause = useCallback(() => {
+    if (pauseRef.current) resumeMic();
+    else pauseMic("manual");
+  }, [pauseMic, resumeMic]);
+
+  const toggleTts = useCallback(() => {
+    const next = !ttsRef.current;
+    ttsRef.current = next;
+    setTts(next);
+    try {
+      window.localStorage.setItem(TTS_PREF_KEY, next ? "on" : "off");
+    } catch {
+      /* storage blocked — the choice holds for this visit only */
+    }
+    // Muting mid-sentence silences her now; in voice mode she goes back to listening.
+    if (!next) stopSpeaking(true);
+  }, [stopSpeaking]);
+
   const stopVoice = useCallback(() => {
     voiceRef.current = false;
     speakingRef.current = false;
+    // Turning voice off mid-answer means "be quiet", not "tell me later".
+    suppressSpeechRef.current = true;
+    // A push-to-talk in progress is abandoned, not sent.
+    pttPhaseRef.current = "idle";
+    pttSourceRef.current = null;
+    pttFinalRef.current = "";
+    pttInterimRef.current = "";
+    clearTimeout(pttEndTimer.current);
+    setPtt(false);
+    setPauseReason(null);
+    deliberateStopRef.current = false;
+    // A stale watchdog firing done() after voice is restarted would open a bogus
+    // 1.2 s echo window and drop the officer's first words.
+    clearTimeout(ttsWatchdog.current);
     setVoiceMode(false);
     setSpeaking(false);
     setListening(false);
@@ -672,7 +1023,7 @@ export default function AgentConsole() {
     if (typeof window !== "undefined") {
       try { window.speechSynthesis?.cancel(); } catch {}
     }
-  }, []);
+  }, [setPauseReason]);
 
   const startVoice = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -692,16 +1043,20 @@ export default function AgentConsole() {
     setSpeaking(false);
     quickEndsRef.current = 0;
     listeningStartedAt.current = 0;
+    deliberateStopRef.current = false;
+    suppressSpeechRef.current = false;
+    setPauseReason(null);
     voiceRef.current = true;
     setVoiceMode(true);
-    // Force TTS on in voice mode — the agent must always speak back
-    setTts(true);
-    ttsRef.current = true;
+    // Voice replies follow the officer's (persisted) mute choice. Voice mode used
+    // to force them back on, which made Mute silently undo itself every time voice
+    // was restarted; the HUD now says "Replies muted" in plain text instead, so a
+    // quiet Kavya is never a mystery.
     setOpen(true);
     setReply(null);
     setSuggestions([]);
     safeStart();
-  }, [safeStart]);
+  }, [safeStart, setPauseReason]);
 
   const toggleVoice = useCallback(() => {
     if (voiceRef.current) stopVoice();
@@ -723,8 +1078,12 @@ export default function AgentConsole() {
   useEffect(() => {
     return () => {
       voiceRef.current = false;
+      pttPhaseRef.current = "idle";
       clearTimeout(restartTimer.current);
       clearInterval(ttsKeepAlive.current);
+      clearTimeout(pttEndTimer.current);
+      clearTimeout(holdTimer.current);
+      clearTimeout(hintTimer.current);
       try {
         recogRef.current?.stop();
       } catch {
@@ -734,7 +1093,22 @@ export default function AgentConsole() {
     };
   }, []);
 
-  // ⌘K focuses the text console.
+  // "Close the assistant": collapse the conversation and the suggestion tray, and
+  // switch the AI controls off — voice mode ends (mic released, speech cancelled);
+  // in text mode any reply being read aloud stops. An answer still in flight is
+  // shown when it lands but not spoken. Shared by click-outside and Esc.
+  const dismiss = useCallback(() => {
+    clearTimeout(holdTimer.current);
+    cancelPtt();
+    suppressSpeechRef.current = true;
+    if (voiceRef.current) stopVoice();
+    else stopSpeaking(false);
+    setOpen(false);
+    setPanelOpen(false);
+  }, [cancelPtt, stopSpeaking, stopVoice]);
+
+  // ⌘K focuses the text console. Esc keeps its meaning: in voice mode it turns
+  // voice off (exactly as before); otherwise it closes the assistant.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -743,15 +1117,165 @@ export default function AgentConsole() {
         setTimeout(() => inputRef.current?.focus(), 60);
       }
       if (e.key === "Escape") {
+        cancelPtt();
         if (voiceRef.current) stopVoice();
-        else setOpen(false);
+        else dismiss();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stopVoice]);
+  }, [cancelPtt, dismiss, stopVoice]);
 
-  const orbState: "idle" | "listening" | "thinking" | "speaking" = speaking
+  // Something of the assistant is on screen (or audible). Only then does a click
+  // elsewhere mean "dismiss"; with everything closed the listener is not attached.
+  const engaged = voiceMode || open || speaking || ptt || (panelOpen && turns.length > 0);
+  const engagedRef = useRef(false);
+  useEffect(() => {
+    engagedRef.current = engaged;
+  }, [engaged]);
+
+  // Click / tap outside closes the assistant. Capture phase so page widgets that
+  // stop propagation (map canvases, graph views) cannot swallow the dismissal.
+  // This listens to the officer's pointer only: navigation the assistant performs
+  // itself (voice commands, entity links inside the panel) is not a pointerdown
+  // outside, so it never ends voice mode.
+  useEffect(() => {
+    if (!engaged) return;
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return; // right/middle click is not "dismiss"
+      const root = rootRef.current;
+      const target = e.target;
+      if (!root || !(target instanceof Node) || root.contains(target)) return;
+      if (pttPhaseRef.current !== "idle") return; // mid push-to-talk
+      dismiss();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, [engaged, dismiss]);
+
+  // Background tab: release the mic (a hidden page should not be listening to the
+  // room), and take it back on return — but only if the tab caused the pause.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) {
+        cancelPtt();
+        if (voiceRef.current) pauseMic("hidden");
+      } else if (pauseRef.current === "hidden") {
+        resumeMic();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [cancelPtt, pauseMic, resumeMic]);
+
+  // Hold Space to talk. Active only where it cannot steal a keystroke that means
+  // something else: voice mode paused, or voice off while the assistant is open —
+  // never while typing or with a control focused (Space presses buttons), and
+  // never during always-listening (nothing to hold for). Outside those cases Space
+  // scrolls the page as usual.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      if (pttSourceRef.current === "key") {
+        e.preventDefault(); // key-repeat while held must not scroll the page
+        return;
+      }
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const allowed = voiceRef.current ? !!pauseRef.current : engagedRef.current;
+      if (!allowed || isInteractiveTarget(e.target)) return;
+      if (beginPtt("key")) e.preventDefault();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || pttSourceRef.current !== "key") return;
+      e.preventDefault();
+      endPtt();
+    };
+    // Focus left mid-hold (alt-tab): the keyup will never come. Abandon rather
+    // than send half a question.
+    const blur = () => {
+      if (pttSourceRef.current === "key") cancelPtt();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, [beginPtt, cancelPtt, endPtt]);
+
+  // Orb: tap toggles hands-free voice (unchanged); press-and-hold is push-to-talk.
+  // The hold is only armed where push-to-talk is allowed, so with hands-free voice
+  // live a long press is still just a tap.
+  const onOrbPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      suppressClickRef.current = false;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if (voiceRef.current && !pauseRef.current) return;
+      // Capture at once: a release that lands off the orb before the hold timer
+      // fires must still reach onOrbPointerUp and cancel it, or the timer would
+      // open the mic with no release left to close it.
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* pointer already gone — pointerup/cancel below still end it */
+      }
+      clearTimeout(holdTimer.current);
+      holdTimer.current = setTimeout(() => {
+        if (!beginPtt("pointer")) return;
+        suppressClickRef.current = true; // the release must not also toggle voice
+      }, PTT_HOLD_MS);
+    },
+    [beginPtt]
+  );
+  const onOrbPointerUp = useCallback(() => {
+    clearTimeout(holdTimer.current);
+    if (pttSourceRef.current === "pointer") {
+      endPtt();
+      // If the release landed off the orb no click follows to consume the flag;
+      // clear it so the next real tap or Enter is not swallowed.
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 400);
+    }
+  }, [endPtt]);
+  const onOrbPointerCancel = useCallback(() => {
+    clearTimeout(holdTimer.current);
+    if (pttSourceRef.current === "pointer") cancelPtt();
+  }, [cancelPtt]);
+  const onOrbClick = useCallback(() => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    toggleVoice();
+  }, [toggleVoice]);
+
+  // The analyser only runs while the hands-free wave is showing live audio.
+  useMicLevel(voiceMode && listening && !speaking && (!micPaused || ptt), levelRef);
+
+  const openEntity = useCallback(
+    (id: string) => {
+      if (/^SUS-/i.test(id)) router.push(`/suspect?id=${encodeURIComponent(id.toUpperCase())}`);
+      else router.push(`/case?id=${encodeURIComponent(id)}`);
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [turns, busy]);
+
+  const clearConversation = useCallback(() => {
+    historyRef.current = [];
+    setTurns([]);
+    setReply(null);
+    setSuggestions([]);
+  }, []);
+
+  const orbState: VoiceState = speaking
     ? "speaking"
     : busy
     ? "thinking"
@@ -763,87 +1287,140 @@ export default function AgentConsole() {
     ? "Speaking…"
     : busy
     ? "Thinking…"
+    : ptt
+    ? "Listening · release to send"
+    : micPaused
+    ? pauseReason === "hidden"
+      ? "Mic paused · tab in background"
+      : "Mic paused"
     : listening
     ? "Listening"
     : voiceMode
     ? "Starting mic…"
     : "";
 
+  // Paused reads as paused everywhere the orb appears: desaturated, with a mic-off
+  // badge. Done here rather than as a new VoiceState so the wave and the edge-glow
+  // CSS (which key off the four existing states) are untouched.
+  const showPaused = voiceMode && micPaused && !ptt;
+  const pausedOrb = (orb: React.ReactNode, iconClass: string) => (
+    <span className="relative inline-grid place-items-center">
+      <span className={`inline-grid transition-[filter,opacity] duration-300 ${showPaused ? "opacity-70 grayscale" : ""}`}>{orb}</span>
+      {showPaused && <MicOff className={`absolute text-white drop-shadow ${iconClass}`} aria-hidden="true" />}
+    </span>
+  );
+
+  // Dark-HUD control pill. Focus ring comes from the global :focus-visible rule.
+  const hudPill =
+    "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors active:scale-95";
+
+  const chips = (dark: boolean) =>
+    suggestions.length > 0 &&
+    !busy && (
+      <div className={`mt-3 flex flex-wrap gap-1.5 ${dark ? "justify-center" : ""}`}>
+        {suggestions.map((s) => (
+          <button
+            key={s.query}
+            onClick={() => submit(s.query)}
+            disabled={busy}
+            className={`group inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11.5px] font-medium transition-all active:scale-95 disabled:opacity-40 ${
+              dark
+                ? "border border-white/15 bg-white/[0.06] text-white/85 hover:border-white/30 hover:bg-white/[0.12]"
+                : "border border-brand/25 bg-brand/[0.06] text-brand/90 hover:border-brand/50 hover:bg-brand/12 hover:text-brand"
+            }`}
+          >
+            {s.label}
+            <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+          </button>
+        ))}
+      </div>
+    );
+
   return (
     <div id="agent-console" className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-5">
-      <div className="w-full max-w-2xl">
-        {/* ---------------- Premium Voice HUD ---------------- */}
+      <AnimatePresence>
+        {voiceMode && (
+          // Dimmed while the mic is paused, so the screen edge stops claiming
+          // "listening". Opacity on the wrapper leaves the fixed glow positioned
+          // against the viewport as before.
+          <div key="edge" className="transition-opacity duration-500" style={{ opacity: showPaused ? 0.3 : 1 }}>
+            <EdgeGlow state={orbState} />
+          </div>
+        )}
+      </AnimatePresence>
+      <div ref={rootRef} className="relative z-50 w-full max-w-2xl">
+        {/* ---------------- Siri-style voice HUD ---------------- */}
         <AnimatePresence>
           {voiceMode && (
             <motion.div
               key="voice-hud"
-              initial={{ opacity: 0, y: 18, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.98 }}
-              transition={{ duration: 0.45, ease: [0.32, 0.72, 0, 1] }}
-              className="mb-3 overflow-hidden rounded-[1.8rem] border border-black/12 bg-[#ffffff]/97 shadow-[0_30px_80px_-24px_rgba(17,20,32,0.16)] backdrop-blur-2xl"
+              initial={{ opacity: 0, y: 24, scale: 0.96, filter: "blur(6px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: 16, scale: 0.97, filter: "blur(4px)" }}
+              transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
+              className="mb-3 overflow-hidden rounded-[2rem] border border-white/10 bg-[#07070d]/95 text-white shadow-[0_40px_100px_-30px_rgba(60,40,140,0.65)] backdrop-blur-2xl"
             >
-              {/* animated top hairline */}
-              <div
-                className={`h-[2px] w-full ${
-                  orbState === "speaking"
-                    ? "bg-gradient-to-r from-transparent via-azure to-transparent"
-                    : "bg-gradient-to-r from-transparent via-brand to-transparent"
-                } ${orbState === "listening" || orbState === "speaking" ? "shimmer" : ""}`}
-              />
-              <div className="p-5">
-                {/* header row */}
+              {/* aurora backdrop */}
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[2rem]">
+                <motion.div
+                  className="absolute -left-1/4 -top-1/2 h-[140%] w-[150%] opacity-40"
+                  style={{
+                    background:
+                      "radial-gradient(40% 35% at 30% 60%, rgba(150,95,255,0.45), transparent 70%), radial-gradient(35% 30% at 70% 55%, rgba(47,140,255,0.4), transparent 70%), radial-gradient(30% 25% at 50% 75%, rgba(231,180,60,0.35), transparent 70%)",
+                  }}
+                  animate={{ rotate: orbState === "thinking" ? 360 : [0, 8, -6, 0] }}
+                  transition={
+                    orbState === "thinking"
+                      ? { duration: 6, repeat: Infinity, ease: "linear" }
+                      : { duration: 14, repeat: Infinity, ease: "easeInOut" }
+                  }
+                />
+              </div>
+              <div className="relative p-5">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span
-                        className={`absolute inline-flex h-full w-full rounded-full ${
-                          listening ? "animate-ping bg-brand" : "bg-faint"
-                        } opacity-75`}
-                      />
-                      <span className={`relative inline-flex h-2 w-2 rounded-full ${listening ? "bg-brand" : "bg-faint"}`} />
-                    </span>
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">Kavya Voice AI</span>
-                    {stateLabel && <span className="text-[11px] text-faint">· {stateLabel}</span>}
+                  <div className="flex items-center gap-2.5">
+                    {pausedOrb(<SiriOrb state={orbState} size={30} />, "h-3.5 w-3.5")}
+                    <div className="leading-tight">
+                      <div className="text-[12px] font-semibold tracking-[0.18em] text-white/90">KAVYA</div>
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        className={`text-[11px] ${showPaused ? "font-semibold text-brand-soft" : "text-white/50"}`}
+                      >
+                        {stateLabel || "Voice assistant"}
+                        {!tts && <span className="text-white/40"> · replies muted</span>}
+                      </div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setTts((v) => !v)}
-                      title={tts ? "Voice replies on" : "Voice replies off"}
-                      className={`grid h-8 w-8 place-items-center rounded-full transition-colors ${
-                        tts ? "bg-brand/15 text-brand" : "bg-black/[0.04] text-faint hover:text-ink"
-                      }`}
-                    >
-                      {tts ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                    </button>
                     {availableVoices.length > 0 && (
                       <select
                         value={selectedVoiceName}
                         onChange={(e) => setSelectedVoiceName(e.target.value)}
-                        className="hidden max-w-[150px] rounded-full border border-black/10 bg-black/[0.04] px-2.5 py-1 text-[11px] font-semibold text-ink outline-none transition-all hover:bg-black/[0.08] sm:block cursor-pointer"
-                        title="Select Human Neural Voice"
+                        className="hidden max-w-[150px] cursor-pointer rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white/85 outline-none transition-all hover:bg-white/[0.12] sm:block"
+                        title="Select voice"
                       >
-                        <option value="">👩 Realistic Female (Auto)</option>
+                        <option value="" className="text-ink">Natural voice (auto)</option>
                         {availableVoices
-                          .filter((v) => {
-                            const prefix = (lang.code || "en").split("-")[0].toLowerCase();
-                            return v.lang.toLowerCase().startsWith(prefix);
-                          })
+                          .filter((v) => v.lang.toLowerCase().startsWith((lang.code || "en").split("-")[0].toLowerCase()))
                           .map((v) => (
-                            <option key={v.name} value={v.name}>
+                            <option key={v.name} value={v.name} className="text-ink">
                               {v.name.replace(/Microsoft|Google|Apple|Online|\(Natural\)/gi, "").trim()}
                             </option>
                           ))}
                       </select>
                     )}
-                    <div className="hidden items-center rounded-full bg-black/[0.04] p-0.5 sm:flex">
+                    <div className="hidden items-center rounded-full bg-white/[0.06] p-0.5 sm:flex">
                       {LANGS.map((l) => (
                         <button
                           key={l.code}
+                          type="button"
                           onClick={() => setLang(l)}
+                          aria-pressed={lang.code === l.code}
+                          aria-label={`Switch language to ${l.native}`}
                           title={l.native}
                           className={`h-7 min-w-7 rounded-full px-2 text-[11.5px] font-semibold transition-all ${
-                            lang.code === l.code ? "bg-brand text-black" : "text-muted hover:text-ink"
+                            lang.code === l.code ? "bg-white text-black" : "text-white/60 hover:text-white"
                           }`}
                         >
                           {l.label}
@@ -851,116 +1428,223 @@ export default function AgentConsole() {
                       ))}
                     </div>
                     <button
+                      type="button"
                       onClick={stopVoice}
                       title="Turn voice off (Esc)"
-                      className="grid h-8 w-8 place-items-center rounded-full bg-black/[0.04] text-faint transition-colors hover:bg-crimson/15 hover:text-crimson"
+                      aria-label="Turn voice off"
+                      className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-white/60 transition-colors hover:bg-crimson/30 hover:text-white"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
 
-                {/* orb */}
-                <div className="mt-3 flex justify-center">
-                  <VoiceOrb state={orbState} />
-                </div>
-
                 {/* live transcript */}
-                <div className="mt-2 min-h-[2.5rem] px-2 text-center">
+                <div className="mt-4 min-h-[2.4rem] px-2 text-center">
                   {interim ? (
-                    <p className="text-[17px] font-medium leading-snug text-ink">
+                    <p className="text-[18px] font-medium leading-snug text-white">
                       {interim}
-                      <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-brand align-middle" />
+                      <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-white/80 align-middle" />
+                    </p>
+                  ) : ptt ? (
+                    <p className="text-[15px] text-white/60">Listening… release to send</p>
+                  ) : hint ? (
+                    <p className="text-[15px] text-white/60">{hint}</p>
+                  ) : showPaused && !busy && !speaking ? (
+                    <p className="text-[15px] text-white/55">
+                      {pauseReason === "hidden"
+                        ? "Mic paused while this tab was in the background."
+                        : "Mic paused. Nothing is being heard. Press Resume, or hold the orb to talk."}
                     </p>
                   ) : lastCommand && (busy || speaking || reply) ? (
-                    <p className="text-[15px] leading-snug text-muted">“{lastCommand}”</p>
+                    <p className="text-[15px] leading-snug text-white/60">“{lastCommand}”</p>
                   ) : (
-                    <p className="text-[15px] text-faint">
-                      {listening ? "Listening… just speak your command" : "Warming up the microphone…"}
+                    <p className="text-[15px] text-white/45">
+                      {listening ? "Listening… ask about any case, person or district" : "Warming up the microphone…"}
                     </p>
                   )}
                 </div>
 
-                {/* reply */}
+                {/* the wave */}
+                <div className="-mx-5 mt-1">
+                  <SiriWave state={orbState} levelRef={levelRef} height={92} />
+                </div>
+
+                {busy && (
+                  <div className="mt-1 text-center">
+                    <ThinkingLine dark />
+                  </div>
+                )}
+
                 <AnimatePresence mode="wait">
                   {reply && !busy && (
                     <motion.div
                       key={reply.text}
-                      initial={{ opacity: 0, y: 6 }}
+                      initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="mt-3 flex items-start gap-2.5 rounded-2xl border border-black/[0.07] bg-black/[0.03] p-3.5"
+                      transition={{ duration: 0.35 }}
+                      className="kavya-scroll mt-2 max-h-[32vh] overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left text-[13.5px] leading-relaxed text-white/85"
                     >
-                      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand/15 text-brand">
-                        <Sparkles className="h-3.5 w-3.5" />
-                      </span>
-                      <p className="text-[13.5px] leading-relaxed text-ink/90">{reply.text}</p>
+                      <RichText text={reply.text} onEntity={openEntity} dark />
+                      <TraceStrip trace={reply.trace} mode={reply.mode} dark />
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {chips(true)}
 
-                {/* suggestion chips */}
-                {suggestions.length > 0 && !busy && (
-                  <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                    {suggestions.map((s) => (
-                      <button
-                        key={s.query}
-                        onClick={() => submit(s.query)}
-                        className="group inline-flex items-center gap-1 rounded-full border border-brand/25 bg-brand/[0.06] px-3 py-1.5 text-[11.5px] font-medium text-brand/90 transition-all hover:border-brand/50 hover:bg-brand/12 hover:text-brand active:scale-95"
-                      >
-                        {s.label}
-                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Voice controls: labelled pills, not bare icons, so pausing the mic,
+                    cutting Kavya off and muting her are findable at a glance. */}
+                <div role="group" aria-label="Voice controls" className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleMicPause}
+                    aria-pressed={micPaused}
+                    aria-label="Pause microphone"
+                    title={micPaused ? "Resume listening" : "Pause the microphone without leaving voice mode"}
+                    className={`${hudPill} ${
+                      micPaused
+                        ? "border-brand-soft/60 bg-brand-soft/20 text-white hover:bg-brand-soft/30"
+                        : "border-white/15 bg-white/[0.06] text-white/85 hover:border-white/30 hover:bg-white/[0.12]"
+                    }`}
+                  >
+                    {micPaused ? <Play className="h-3.5 w-3.5" aria-hidden="true" /> : <Pause className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {micPaused ? "Resume mic" : "Pause mic"}
+                  </button>
+                  {speaking && (
+                    <button
+                      type="button"
+                      onClick={() => stopSpeaking()}
+                      aria-label="Stop speaking"
+                      title={micPaused ? "Stop Kavya speaking" : "Stop Kavya speaking and listen again"}
+                      className={`${hudPill} border-crimson/40 bg-crimson/20 text-white hover:bg-crimson/30`}
+                    >
+                      <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                      Stop speaking
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={toggleTts}
+                    aria-pressed={!tts}
+                    aria-label="Mute voice replies"
+                    title={tts ? "Kavya reads answers aloud. Click to mute (remembered)" : "Voice replies are muted (remembered). Click to unmute"}
+                    className={`${hudPill} ${
+                      tts
+                        ? "border-white/15 bg-white/[0.06] text-white/85 hover:border-white/30 hover:bg-white/[0.12]"
+                        : "border-white/25 bg-white/15 text-white hover:bg-white/20"
+                    }`}
+                  >
+                    {tts ? <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> : <VolumeX className="h-3.5 w-3.5" aria-hidden="true" />}
+                    {tts ? "Replies on" : "Replies muted"}
+                  </button>
+                </div>
+                <p className="mt-3 hidden text-center text-[10.5px] tracking-wide text-white/35 sm:block">
+                  Esc or click outside turns voice off · while paused, hold the orb (or Space, with no button focused) to talk
+                </p>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* ---------------- Reply ribbon (text mode) ---------------- */}
+        {/* ---------------- Push-to-talk (voice mode off) ---------------- */}
         <AnimatePresence>
-          {reply && !voiceMode && (
+          {!voiceMode && (ptt || hint) && (
             <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              key="ptt"
+              role="status"
+              aria-live="polite"
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-              className="mb-3 flex items-start gap-3 rounded-2xl border border-black/10 bg-[#ffffff]/97 p-4 shadow-[0_24px_60px_-20px_rgba(17,20,32,0.16)] backdrop-blur-xl"
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+              className="mb-3 flex items-center gap-3 rounded-[1.4rem] border border-white/10 bg-[#07070d]/95 px-4 py-2.5 text-white shadow-[0_28px_70px_-22px_rgba(60,40,140,0.55)] backdrop-blur-2xl"
             >
-              <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand/15 text-brand">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13.5px] leading-relaxed text-ink/90">{reply.text}</p>
-                {suggestions.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {suggestions.map((s) => (
-                      <button
-                        key={s.query}
-                        onClick={() => submit(s.query)}
-                        disabled={busy}
-                        className="group inline-flex items-center gap-1 rounded-full border border-brand/25 bg-brand/[0.06] px-3 py-1.5 text-[11.5px] font-medium text-brand/90 transition-all hover:border-brand/50 hover:bg-brand/12 hover:text-brand active:scale-95 disabled:opacity-40"
-                      >
-                        {s.label}
-                        <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-                      </button>
-                    ))}
+              <SiriOrb state={ptt ? orbState : "idle"} size={24} />
+              <p className="min-w-0 flex-1 truncate text-[13.5px] text-white/85">
+                {ptt ? interim || "Listening… release to send" : hint}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ---------------- Conversation (text mode) ---------------- */}
+        <AnimatePresence>
+          {!voiceMode && turns.length > 0 && panelOpen && (
+            <motion.div
+              key="conversation"
+              initial={{ opacity: 0, y: 14, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+              className="mb-3 overflow-hidden rounded-[1.6rem] border border-black/10 bg-white/97 shadow-[0_28px_70px_-22px_rgba(17,20,32,0.22)] backdrop-blur-xl"
+            >
+              <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <SiriOrb state={busy ? "thinking" : "idle"} size={24} />
+                  <span className="text-[12px] font-semibold tracking-[0.16em] text-ink">KAVYA</span>
+                  <span className="text-[11px] text-faint">investigative copilot</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={clearConversation}
+                    title="New conversation"
+                    aria-label="Start a new conversation"
+                    className="grid h-7 w-7 place-items-center rounded-full text-faint transition-colors hover:bg-black/[0.05] hover:text-ink"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPanelOpen(false)}
+                    title="Minimise"
+                    aria-label="Minimise the conversation"
+                    className="grid h-7 w-7 place-items-center rounded-full text-faint transition-colors hover:bg-black/[0.05] hover:text-ink"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div ref={scrollRef} className="kavya-scroll max-h-[46vh] space-y-3 overflow-y-auto px-4 py-3.5">
+                {turns.map((t) =>
+                  t.role === "user" ? (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex justify-end"
+                    >
+                      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-[13.5px] leading-snug text-white">
+                        {t.text}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
+                      className="flex items-start gap-2.5"
+                    >
+                      <span className="mt-0.5">
+                        <SiriOrb state="idle" size={22} />
+                      </span>
+                      <div className="min-w-0 flex-1 text-[13.5px] leading-relaxed text-ink/90">
+                        <RichText text={t.text} onEntity={openEntity} />
+                        <TraceStrip trace={t.trace} mode={t.mode} />
+                      </div>
+                    </motion.div>
+                  )
+                )}
+                {busy && (
+                  <div className="flex items-center gap-2.5">
+                    <SiriOrb state="thinking" size={22} />
+                    <ThinkingLine />
                   </div>
                 )}
+                {chips(false)}
               </div>
-              <button
-                type="button"
-                aria-label="Dismiss assistant reply"
-                onClick={() => {
-                  setReply(null);
-                  setSuggestions([]);
-                }}
-                className="text-faint transition-colors hover:text-ink"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -980,7 +1664,7 @@ export default function AgentConsole() {
           className="rounded-[1.6rem] border border-black/10 bg-[#ffffff]/97 p-2 shadow-[0_28px_70px_-20px_rgba(17,20,32,0.16)] backdrop-blur-xl"
         >
           <AnimatePresence>
-            {open && !voiceMode && (
+            {open && !voiceMode && turns.length === 0 && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
@@ -1010,35 +1694,81 @@ export default function AgentConsole() {
             }}
             className="flex items-center gap-2"
           >
-            {/* Voice toggle */}
+            {/* Voice toggle — the orb itself is the button. Tap: hands-free on/off.
+                Hold (voice off, or voice paused): push-to-talk, release to send. */}
             <button
               type="button"
-              onClick={toggleVoice}
+              onClick={onOrbClick}
+              onPointerDown={onOrbPointerDown}
+              onPointerUp={onOrbPointerUp}
+              onPointerCancel={onOrbPointerCancel}
+              onContextMenu={(e) => e.preventDefault()}
               disabled={!speechOK}
               aria-pressed={voiceMode}
-              aria-label={speechOK ? (voiceMode ? "Turn voice off" : "Turn voice on") : "Voice not supported in this browser"}
-              title={speechOK ? (voiceMode ? "Turn voice off" : "Turn voice on — always listening") : "Voice not supported in this browser"}
-              className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-full transition-all duration-300 active:scale-95 ${
-                voiceMode
-                  ? "bg-gradient-to-b from-brand-soft to-brand text-black pulse-ring"
-                  : "bg-black/[0.04] text-muted hover:bg-black/[0.08] hover:text-ink disabled:opacity-40"
-              }`}
+              aria-label={
+                speechOK
+                  ? voiceMode
+                    ? micPaused
+                      ? "Turn voice off (mic paused; hold to push-to-talk)"
+                      : "Turn voice off"
+                    : "Turn voice on (hold to push-to-talk)"
+                  : "Voice not supported in this browser"
+              }
+              title={
+                speechOK
+                  ? voiceMode
+                    ? micPaused
+                      ? "Tap: turn voice off · Hold: talk while paused"
+                      : "Turn voice off"
+                    : "Tap: talk to Kavya hands-free · Hold: push-to-talk"
+                  : "Voice not supported in this browser"
+              }
+              // touch-none + select-none: a long press on touch must not scroll,
+              // select text or open the callout menu instead of talking.
+              className="relative grid h-11 w-11 shrink-0 touch-none select-none place-items-center rounded-full transition-transform active:scale-95 disabled:opacity-40 [-webkit-touch-callout:none]"
             >
-              {speechOK ? <Mic className="h-[18px] w-[18px]" /> : <MicOff className="h-[18px] w-[18px]" />}
+              {speechOK ? (
+                <span className="relative grid place-items-center">
+                  {pausedOrb(
+                    <SiriOrb state={voiceMode || ptt || speaking ? orbState : busy ? "thinking" : "idle"} size={42} />,
+                    "h-[17px] w-[17px]"
+                  )}
+                  {!voiceMode && !ptt && <Mic className="absolute h-[17px] w-[17px] text-white drop-shadow" />}
+                </span>
+              ) : (
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-black/[0.04] text-muted">
+                  <MicOff className="h-[18px] w-[18px]" />
+                </span>
+              )}
             </button>
 
             <input
               ref={inputRef}
               value={input}
-              onFocus={() => setOpen(true)}
+              onFocus={() => {
+                setOpen(true);
+                setPanelOpen(true);
+              }}
               onChange={(e) => setInput(e.target.value)}
               placeholder={
-                voiceMode ? "Kavya is listening — speak your command or type here…" : "Ask Kavya AI — “open FIR-20345”, “ai suspect matching”, “show heatmap”…"
+                voiceMode
+                  ? "Kavya is listening — speak, or type here…"
+                  : "Ask Kavya anything — a case, a person, a district, a trend…"
               }
               className="min-w-0 flex-1 bg-transparent px-2 text-[14px] text-ink placeholder:text-faint focus:outline-none"
             />
 
-            {/* Language toggle (text mode) */}
+            {!voiceMode && turns.length > 0 && !panelOpen && (
+              <button
+                type="button"
+                onClick={() => setPanelOpen(true)}
+                aria-label={`Show the conversation (${Math.ceil(turns.length / 2)} messages)`}
+                className="hidden rounded-full bg-black/[0.04] px-2.5 py-1 text-[11px] font-semibold text-muted transition-colors hover:text-ink sm:block"
+              >
+                {Math.ceil(turns.length / 2)} msg
+              </button>
+            )}
+
             {!voiceMode && (
               <div className="hidden items-center rounded-full bg-black/[0.04] p-0.5 sm:flex">
                 {LANGS.map((l) => (
@@ -1057,6 +1787,33 @@ export default function AgentConsole() {
                   </button>
                 ))}
               </div>
+            )}
+
+            {/* Text mode reads answers aloud too, so the same two controls live here. */}
+            {!voiceMode && speaking && (
+              <button
+                type="button"
+                onClick={() => stopSpeaking(false)}
+                aria-label="Stop speaking"
+                title="Stop Kavya speaking"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-crimson/10 text-crimson transition-colors hover:bg-crimson/20"
+              >
+                <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+              </button>
+            )}
+            {!voiceMode && (
+              <button
+                type="button"
+                onClick={toggleTts}
+                aria-pressed={!tts}
+                aria-label="Mute voice replies"
+                title={tts ? "Kavya reads answers aloud. Click to mute (remembered)" : "Voice replies muted (remembered). Click to unmute"}
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors ${
+                  tts ? "text-muted hover:bg-black/[0.05] hover:text-ink" : "bg-black/[0.06] text-ink"
+                }`}
+              >
+                {tts ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
+              </button>
             )}
 
             <button
@@ -1079,14 +1836,9 @@ export default function AgentConsole() {
         </motion.div>
 
         <p className="mt-2 hidden text-center text-[10.5px] tracking-wide text-faint sm:block">
-          <kbd className="rounded bg-black/5 px-1.5 py-0.5 font-sans">⌘K</kbd> to command ·{" "}
-          {speechOK ? (
-            <>
-              <Mic className="inline h-3 w-3" /> tap to talk hands-free
-            </>
-          ) : (
-            "Llama-3.3 70B · EN / ಕನ್ನಡ"
-          )}
+          <kbd className="rounded bg-black/5 px-1.5 py-0.5 font-sans">⌘K</kbd> to ask ·{" "}
+          {speechOK ? "tap the orb to talk hands-free, hold it to push-to-talk" : "EN / ಕನ್ನಡ"} · Esc or click away
+          to close · every case and person id is verified against the records
         </p>
       </div>
     </div>

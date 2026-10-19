@@ -6,16 +6,14 @@
 - Tailwind CSS v4
 - Framer Motion
 - Recharts
-- **Two map engines, chosen at runtime.** The map always draws:
-  - **Google Maps** (`@googlemaps/js-api-loader`, greyscale style) when
-    `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is set in `web/.env.local` — gitignored; it
-    must never go in `.env.production`, which is tracked. `set_keys.py --maps` writes
-    it correctly.
-  - **Leaflet** over Esri's keyless grey canvas tiles otherwise — and also when a key
-    is present but Google rejects it, which is reported through `window.gm_authFailure`
-    rather than a failed promise. Both engines draw the same layers with the same
-    colours, the same zoom gate and the same marker budget, defined once in
-    `map-shared.tsx`.
+- **deck.gl 9** (hexagon, heatmap, GeoJSON, arc and text layers) for every map mode (3D,
+  heatmap, district choropleth, satellite) over a MapLibre basemap via react-map-gl: keyless
+  CARTO dark-matter / positron vector tiles and Esri World Imagery; raster CARTO tiles are the
+  fallback if a style cannot be fetched.
+  District boundaries ship as `web/public/geo/karnataka-districts.geojson` (31 districts) and the
+  state outline as `karnataka-outline.geojson`.
+- **CCTV feeds:** recorded Bengaluru street footage from Wikimedia Commons (`web/public/cctv/`,
+  640x360 H.264) with YOLO11s + ByteTrack detections computed offline and replayed on a canvas.
 - react-force-graph-2d / -3d + three.js (network view)
 
 ## Backend

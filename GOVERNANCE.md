@@ -150,6 +150,25 @@ the hotspot card asks whether zones re-appear in the same places every cycle.
 
 ---
 
+## Surveillance matching
+
+Face and plate matching is the feature in this platform most able to harm a person who
+has done nothing, so it carries the tightest controls:
+
+* **A match is a lead.** Every P1/P2 sighting waits in a queue; verifying or rejecting it
+  requires a written note of what was checked, and the decision is logged append-only with
+  the officer's name. Nothing is triggered by a match.
+* **Strangers stay strangers.** A face that does not match the registry is counted and
+  discarded at detection time. The feed never carries its identity.
+* **Error rates are published, not assumed.** The threshold was set for under 0.5 % false
+  matches on look-alikes; true-identification falls at night and on low-resolution cameras,
+  and the page says by how much. A deployment must re-measure all of it on its own cameras and
+  population, by age band and gender, before operational use.
+* **What is simulated:** the camera network, the face embeddings and the plate reads. The
+  matching, thresholds and measured rates are real computations on that data.
+
+---
+
 ## Known gaps
 
 Stated because their absence is a gap, not an oversight.

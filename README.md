@@ -106,6 +106,43 @@ reviewers and nowhere else:
 | `analyst` | `scrb-analyst` | analyst — aggregate only |
 | `io` | `scrb-io` | investigator — adds case and dossier access |
 | `sp` | `scrb-sp` | supervisor — full watchlist and audit log |
+| `dgp@ksp.gov.in` | `scrb-dgp` | State DGP — statewide, every permission |
+| `admin@ksp.gov.in` | `scrb-admin` | Admin — platform settings, sync, retention |
+| `sp.bengaluru@ksp.gov.in` | `scrb-sp` | District SP (Bengaluru Urban) — district cases, CCTV decisions, in-district watchlist names |
+| `dsp.mysuru@ksp.gov.in` | `scrb-dsp` | Deputy SP (Mysuru) — district cases, verify/escalate CCTV matches |
+| `sho.koramangala@ksp.gov.in` | `scrb-sho` | SHO, Koramangala PS — station cases, verify CCTV matches |
+| `si.koramangala@ksp.gov.in` | `scrb-si` | SI, Koramangala PS — station cases, acknowledge alerts |
+| `analyst@ksp.gov.in` | `scrb-analyst` | SCRB Analyst — aggregates only |
+
+The web client now opens on the **sign-in page** (`/`), with one-click demo personas;
+the command overview moved to `/overview`. Each role carries a tier, a list of
+permissions and a jurisdiction (state / district / station) inside its signed token:
+list views, Kavya's answers, CCTV alerts and FIR registration are all cut to that
+jurisdiction server-side. `GET /serverless/api/auth/roles` publishes the matrix.
+
+**New in this release**
+
+* **Register FIR** (`/fir/new`, `POST /serverless/api/fir/register`) — a four-step
+  CCTNS-schema form. Every code is checked against the master tables; Crime No. /
+  Case No. follow the corpus format (category · district · station · year · serial);
+  accused can be linked to the offender registry; registrations persist to
+  `FIR_REGISTRY_PATH` (outside `data/`, so trained models stay valid) and appear at
+  once in cases, the network graph, analytics and Kavya.
+* **Crime Trend Forecast** (Analytics) — annual FIRs per district and year from a
+  partial-pooling ridge regression, backtested against "same as last year", the
+  district mean and a per-district line, with an 80% interval whose coverage is
+  measured out of sample. Picking a past year shows the backtest.
+* **When crime happens** (Overview) — hour-of-day × day-of-week heatmap with a
+  Holm-corrected chi-square test, so an even spread is reported as one.
+* **Live News** (`/news`) — Karnataka crime headlines from GDELT and Google News
+  (plus `NEWSAPI_KEY` / `GNEWS_API_KEY` when set), tagged by district and crime type.
+* **By occupation** (Analytics) and the **case-flow Sankey** (Lifecycle).
+* **Network** rebuilt: search, filters, path finding, syndicates, 2D/3D.
+* **Live CCTV**: attach a real HLS / WebRTC (WHEP) / MJPEG / YouTube live source to
+  any camera (`CAMERA_STREAMS` or `CAMERA_STREAMS_PATH`); a tile says LIVE only when
+  frames arrive, and falls back to its recording otherwise.
+* **Kavya**: pause/resume mic, stop speaking, click outside to close; answers
+  annual forecasts and time-of-day questions.
 
 **Before any deployment holding real records**, set `AUTH_ACCOUNTS`
 (`user:scrypt$salt$key:role`, generate with `python -c "import auth;
@@ -392,9 +429,86 @@ threshold, because real geography defeats thresholds: Koppal and Hosapete
   intervening still changes the outcome.
 * Served at `/serverless/api/pendency` and rendered at [`/pendency`](web/src/app/pendency/page.tsx).
 
-### 7. 🤖 AI Investigative Copilot (Dynamic Cross-Table In-Memory Query Engine)
-* High-speed analytical copilot powered by LLM integration (`NVIDIA_API_KEY` / `GROQ_API_KEY`) with dynamic memory searching across all 26 relational tables.
-* Answers complex queries on **Rowdy Sheeters**, **Pending Trials**, **Under Investigation FIRs**, **Stolen Vehicles**, and **District Hotspots** in English or Kannada.
+### 7. 🤖 Kavya — AI Investigative Copilot (tool-calling retrieval over the whole corpus)
+* **It reads the records instead of a summary.** `appsail/copilot_engine.py` gives the copilot
+  retrieval tools over every table: a full case dossier (narrative, accused with priors and flags,
+  victim, complainant, IO, arrests, chargesheet, court stage, stolen vehicles, cyber identifiers,
+  CCTV, Dial-112, pendency score, similar-MO cases), a person profile (every case they are named in,
+  co-offenders, syndicates, recidivism drivers, court outcomes), officers, every side registry,
+  filtered counts and rankings by district / station / crime / year / month / time of day / weapon,
+  shortest paths through the link graph, every ML output, and the platform's own documentation
+  (`appsail/copilot_knowledge.py`).
+* **LLM tool-calling loop.** Groq `llama-3.3-70b-versatile` (NVIDIA fallback) decides which tools to
+  call and chains them. Records the question names are resolved and pre-fetched first, so a typical
+  answer costs one round trip.
+* **Works with no API key.** The same entity resolution and tools drive a deterministic engine that
+  composes the answer when no provider is configured or all of them fail.
+* **Knows the platform as it is today.** `appsail/build_project_knowledge.py` indexes every
+  Markdown document, backend module docstring, API route (with the role it requires) and web page
+  into `appsail/artifacts/project_knowledge.json`. The copilot searches it, rebuilds it in memory
+  in a full checkout whenever a source is newer, and reads the running system directly for live
+  routes and tables. **After changing docs, routes or pages, run
+  `python appsail/build_project_knowledge.py` and commit the result** — CI fails otherwise.
+* **Scope.** It searches only IntelHub's own role-gated, audited records — never the internet,
+  social media, Aadhaar or any outside database.
+* **Conversation memory.** "this case", "he", "her" resolve to the record on screen or the subject of
+  the previous answer.
+* **Same safeguards as before, applied to more data.** Names in every tool result are aliased before
+  egress and restored locally; every case, offender and officer id in a reply is verified against
+  the corpus; questions of guilt, requests for action against a person, and watchlists of names are
+  refused.
+* **Siri-style voice UI.** A live waveform that follows your microphone level and each word Kavya
+  speaks, an animated orb, a screen-edge glow in voice mode, a conversation transcript with clickable
+  case / offender ids, and a strip showing which records each answer was read from. English and Kannada.
+* **Answers open questions and keeps the thread.** "What's going on in Bangalore right now?" gets a live
+  situation brief (last 7/30 days, crime mix, spikes, forecast, patrol risk, live camera alerts). City
+  names people actually say — Bangalore, Mysore, Hubli, Mangalore — resolve to districts, so "show the
+  latest chain snatching cases in Bangalore" opens the Bengaluru list. Follow-ups are rewritten against
+  the conversation: "what about Belagavi?", "and 2023?", "show them on the map".
+* **Copilot tab (`/copilot`).** A full-page workspace: conversations saved to the officer's account
+  (search, pin, rename, delete), each thread is its own context, answers carry the records they used and a
+  one-click "open this" action, voice dictation, English / ಕನ್ನಡ.
+
+### 8. 🗺️ Crime Map — deck.gl command map: 3D / heatmap / districts / satellite
+* deck.gl draws every layer over keyless CARTO basemaps (dark or light) or Esri imagery for satellite —
+  no API key. Neighbouring states are dimmed and Karnataka carries a glowing outline, so the state is the
+  subject of the screen.
+* **3D:** tilted hexagonal crime columns whose height and colour encode density (square-root scaled, so
+  Bengaluru does not flatten every other district); the bin size adapts to zoom and the columns rise when
+  they appear. **Heatmap:** severity-weighted heat, individual FIRs, DBSCAN zones. **Districts:** a
+  choropleth of all 31 districts — real boundaries, extruded by the chosen metric (cases, per-100k, open,
+  deaths, last 30 days, risk index, cameras), labels de-cluttered so the busiest district wins.
+* **Full screen for presenting:** the map and its insight panel go full screen together (button or `F`);
+  Esc or the red *Exit full screen* button leaves, the panel can be hidden, and the state is re-framed
+  whenever the stage changes size.
+* Pulsing KDE predicted hotspots, emerging-spike markers, live camera alerts, a numbered movement trail
+  for a tracked person (`/map?track=SUS-…`), a 24-hour time-of-day playback, and a cinematic tour.
+* "This view" analyses whatever is on screen: concentration, peak hour, busiest window, open share.
+* Boundaries are Census 2011 district polygons; **Vijayanagara** (2021) is built from its five constituent
+  2011 taluks — see the `source` field in `web/public/geo/karnataka-districts.geojson` for the one
+  limitation (Kampli).
+
+### 9. 📹 CCTV & ANPR Surveillance Command (`/surveillance`)
+* A simulated network of 590 cameras across all 31 districts, Bengaluru-heavy, placed at named public
+  landmarks (transit hubs, junctions, toll plazas, markets) — **not** the KSP Safe City inventory.
+* **Face matching:** every sighting is matched 1:N against the 9,000-person offender gallery (cosine
+  similarity, top-3, threshold + margin). The threshold was chosen for < 0.5 % false matches on
+  look-alikes; measured rates are served at `/surveillance/model` and shown on the page, including the
+  drop at night and on low-resolution cameras.
+* **ANPR:** reads are matched to the stolen-vehicle registry exactly and with an OCR-aware edit distance
+  (0/O, 1/I, 8/B, 5/S … cost less), so a mangled read still finds the car.
+* **Alerts, not actions:** P1 (warrant, exact stolen plate, watchlist) and P2 matches queue for an officer,
+  who must write what they checked to verify or reject; every decision is logged. Personal watchlists,
+  sound / desktop notifications and a nav bell with toasts. Faces with no registry match are counted and
+  discarded, never identified.
+* **Feeds play real footage with real detections.** Each camera plays a 20-second window of street
+  video recorded in Bengaluru in 2024–25 (Wikimedia Commons, CC BY-SA 4.0 / CC BY 3.0, credited in the
+  camera view and under the wall); cameras named after a place we have footage of — Brigade Road, MG Road,
+  Hebbal, Banashankari, Shivajinagar, Mekhri Circle — show that place. The boxes are YOLO11s detections
+  with ByteTrack tracking computed on that footage (`web/public/cctv/tracks/`), replayed in step with the
+  video, with live vehicle / people counts. Registry matches appear as an alert strip on the tile and are
+  never drawn on anyone in the picture — nobody filmed is a registry person. An officer can still point any
+  camera at a real stream URL.
 
 ---
 
@@ -649,4 +763,4 @@ docker-compose down
 
 ## 🛡️ License & Attributions
 
-Developed for the **Karnataka State Police (KSP) State Crime Records Bureau (SCRB)** Datathon. Built with Python, Flask, NetworkX, Scikit-Learn, Next.js, Tailwind CSS, Recharts, and the Google Maps JavaScript API with a keyless Leaflet fallback.
+Developed for the **Karnataka State Police (KSP) State Crime Records Bureau (SCRB)** Datathon. Built with Python, Flask, NetworkX, Scikit-Learn, Next.js, Tailwind CSS, Recharts, deck.gl and MapLibre.

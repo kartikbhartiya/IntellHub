@@ -48,6 +48,12 @@ jobs:
       - name: Run the suite
         run: python -m pytest tests -q
 
+      # The copilot's knowledge of the platform is generated from the docs, routes and
+      # pages. If any of those changed without regenerating it, the copilot would
+      # describe a product that no longer exists.
+      - name: Copilot knowledge must be up to date
+        run: python build_project_knowledge.py --check
+
       - name: Model registry must be present and self-describing
         run: |
           python - <<'PY'

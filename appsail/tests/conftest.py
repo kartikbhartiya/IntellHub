@@ -25,6 +25,8 @@ _SINK_DIR = tempfile.mkdtemp(prefix="ksp-test-sinks-")
 
 # A key of its own, so the suite never depends on whether app-config.json happens to
 # carry one — that difference is exactly what made the failures look intermittent.
+# No test may reach a live news source.
+os.environ.setdefault("NEWS_FETCH", "off")
 os.environ.setdefault("AUDIT_HMAC_KEY", "test-suite-key-not-a-real-secret")
 
 for _var, _name in (
@@ -32,5 +34,9 @@ for _var, _name in (
     ("PREDICTION_LOG_PATH", "predictions.jsonl"),
     ("OUTCOME_LOG_PATH", "outcomes.jsonl"),
     ("CONTEST_LOG_PATH", "contests.jsonl"),
+    ("SURVEILLANCE_LOG_PATH", "surveillance_decisions.jsonl"),
+    ("COPILOT_CONVERSATIONS_PATH", "copilot_conversations.json"),
+    ("FIR_REGISTRY_PATH", "registered_firs.jsonl"),
+    ("CAMERA_STREAMS_PATH", "camera_streams.json"),
 ):
     os.environ[_var] = os.path.join(_SINK_DIR, _name)
