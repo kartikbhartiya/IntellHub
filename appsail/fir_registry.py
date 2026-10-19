@@ -36,17 +36,35 @@ Registrations are appended to ``FIR_REGISTRY_PATH`` (default
 ``appsail/registered_firs.jsonl``) — outside ``data/``, because the ML registry
 fingerprints that directory and a registration must not invalidate trained models.
 main.py replays the file onto the tables at every load.
+
+Photographs
+-----------
+* ``POST /serverless/api/fir/photo`` — one JPEG of the complainant, a victim or an
+  accused, uploaded before the FIR is registered; returns a ``photo_id`` the person
+  then carries in the registration.
+* ``GET  /serverless/api/fir/photo/<photo_id>`` — the image, to a ``view_cases`` role,
+  and only once a registered FIR refers to it.
+
+The server keeps the image data and nothing else: every APPn segment (EXIF, which
+carries the camera's GPS fix and serial number, XMP, ICC) and every comment is
+stripped, and anything after the end-of-image marker is cut. Photos live in
+``FIR_PHOTO_DIR`` (default ``appsail/fir_photos/``), outside the CCTNS tables — the
+schema has no photo column and is not given one. An upload no FIR claims within a day
+is deleted. Both routes are audited.
 """
 import json
 import os
 import re
+import secrets
 import threading
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
+import audit
 import karnataka
 
 bp = Blueprint("fir_registry", __name__)
@@ -85,6 +103,13 @@ BASE_SEVERITY = {
 LAT, LON = (11.5, 18.5), (74.0, 78.6)       # Karnataka bounding box
 MAX_PEOPLE = 20
 _SAFE = re.compile(r"^[^\[\];]*$")          # nothing that could break the METADATA block
+
+PHOTO_DIR = os.environ.get(
+    "FIR_PHOTO_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "fir_photos"))
+MAX_PHOTO_BYTES = 2_000_000                 # the form sends ~100-300 KB; this is a ceiling, not a target
+PHOTO_ORPHAN_S = 24 * 3600                  # an upload no FIR has claimed by then is deleted
+_PHOTO_ID = re.compile(r"^[0-9a-f]{32}$")
+_photos = None                              # crime_no -> [photo record], loaded lazily from the store
 
 
 def configure(cache_getter, on_registered=None, identity=None):
@@ -158,6 +183,127 @@ def masters():
     }
 
 
+# ------------------------------------------------------------------ photographs
+class PhotoError(ValueError):
+    pass
+
+
+def clean_jpeg(data):
+    """The image data of a baseline/progressive JPEG with every metadata segment removed.
+
+    Walks the marker segments up to the start of scan, keeping only what decoding needs
+    (APP0/JFIF, quantisation and Huffman tables, frame header, restart interval) and
+    dropping APP1-APP15 and comments. The entropy-coded scan is copied through to the
+    last end-of-image marker; trailing bytes are discarded, so a file cannot smuggle a
+    second payload behind the picture.
+    """
+    if not isinstance(data, (bytes, bytearray)) or len(data) < 64 or data[:2] != b"\xff\xd8":
+        raise PhotoError("Send the photograph as a JPEG.")
+    end = data.rfind(b"\xff\xd9")
+    if end < 0:
+        raise PhotoError("The JPEG is incomplete.")
+    out = bytearray(b"\xff\xd8")
+    i, n, size = 2, len(data), None
+    while i < n:
+        if data[i] != 0xFF:
+            raise PhotoError("The JPEG is malformed.")
+        while i < n and data[i] == 0xFF:          # fill bytes
+            i += 1
+        if i >= n:
+            break
+        marker = data[i]
+        i += 1
+        if 0xD0 <= marker <= 0xD7 or marker == 0x01:
+            out += bytes((0xFF, marker))
+            continue
+        if marker == 0xD9:
+            break
+        if i + 2 > n:
+            raise PhotoError("The JPEG is truncated.")
+        length = int.from_bytes(data[i:i + 2], "big")
+        if length < 2 or i + length > n:
+            raise PhotoError("The JPEG is malformed.")
+        segment = bytes(data[i:i + length])
+        i += length
+        if marker in (0xC0, 0xC1, 0xC2) and length >= 7:
+            size = (int.from_bytes(segment[5:7], "big"), int.from_bytes(segment[3:5], "big"))
+        if marker == 0xDA:                        # start of scan: image data runs to EOI
+            if size is None:
+                raise PhotoError("The JPEG has no frame header.")
+            if i > end:
+                raise PhotoError("The JPEG is truncated.")
+            out += b"\xff\xda" + segment + data[i:end + 2]
+            w, h = size
+            if not (32 <= w <= 8000 and 32 <= h <= 8000):
+                raise PhotoError("The photograph must be between 32 and 8000 pixels on each side.")
+            return bytes(out)
+        if 0xE1 <= marker <= 0xEF or marker == 0xFE:
+            continue                              # EXIF / XMP / ICC / vendor data / comments
+        out += bytes((0xFF, marker)) + segment
+    raise PhotoError("The JPEG has no image data.")
+
+
+def photo_path(photo_id):
+    return os.path.join(PHOTO_DIR, f"{photo_id}.jpg")
+
+
+def photo_exists(photo_id):
+    return bool(photo_id) and bool(_PHOTO_ID.match(str(photo_id))) and os.path.isfile(photo_path(photo_id))
+
+
+def _photo_index():
+    global _photos
+    if _photos is None:
+        _photos = {str(b["crime_no"]): b["photos"] for b in stored_bundles() if b.get("photos")}
+    return _photos
+
+
+def reset_photo_index():
+    """Forget the cached index (tests that swap the store underneath)."""
+    global _photos
+    _photos = None
+
+
+def photos_for(crime_no):
+    """Photographs on a registered FIR: [{role, name, record_id, person_id, photo_id}]."""
+    return [dict(p) for p in _photo_index().get(str(crime_no), [])]
+
+
+def _sweep_orphans(now=None):
+    """Delete uploads that no registered FIR refers to and that are older than a day."""
+    if not os.path.isdir(PHOTO_DIR):
+        return 0
+    now = now or time.time()
+    claimed = {p["photo_id"] for ps in _photo_index().values() for p in ps}
+    gone = 0
+    for fn in os.listdir(PHOTO_DIR):
+        pid, ext = os.path.splitext(fn)
+        if ext != ".jpg" or pid in claimed:
+            continue
+        path = os.path.join(PHOTO_DIR, fn)
+        try:
+            if now - os.path.getmtime(path) > PHOTO_ORPHAN_S:
+                os.remove(path)
+                gone += 1
+        except OSError:
+            continue
+    return gone
+
+
+def save_photo(data):
+    if len(data) > MAX_PHOTO_BYTES:
+        raise PhotoError(f"The photograph is larger than {MAX_PHOTO_BYTES // 1_000_000} MB.")
+    clean = clean_jpeg(data)
+    os.makedirs(PHOTO_DIR, exist_ok=True)
+    photo_id = secrets.token_hex(16)
+    tmp = photo_path(photo_id) + ".part"
+    with open(tmp, "wb") as fh:
+        fh.write(clean)
+    os.replace(tmp, photo_path(photo_id))
+    _sweep_orphans()
+    return photo_id, len(clean)
+
+
 # ------------------------------------------------------------------ validation
 def _int(v):
     try:
@@ -196,8 +342,11 @@ def _person(p, errors, key, need_name=True, ages=(0, 110)):
     gender = _int(p.get("gender_id"))
     if gender not in GENDERS:
         errors[f"{key}.gender_id"] = "Choose a gender."
-    return {"name": name, "age": age, "gender_id": gender, **{k: v for k, v in p.items()
-                                                              if k not in ("name", "age", "gender_id")}}
+    photo = str(p.get("photo_id") or "").strip() or None
+    if photo and not photo_exists(photo):
+        errors[f"{key}.photo_id"] = "That photograph is no longer on the server — add it again."
+    return {**{k: v for k, v in p.items() if k not in ("name", "age", "gender_id", "photo_id")},
+            "name": name, "age": age, "gender_id": gender, "photo_id": photo}
 
 
 def validate(payload, now=None):
@@ -425,7 +574,21 @@ def build_rows(rec, now=None):
             "ActOrderID": [x[0] for x in rec["sections"]].index(act) + 1, "SectionOrderID": i + 1}
            for i, (act, sec) in enumerate(rec["sections"])]
     kgid = _t(c, "Employee").set_index("EmployeeID")["KGID"].get(rec["officer_id"], f"OFF-{rec['officer_id']}")
+    # Which row each photograph belongs to; the CCTNS rows themselves stay schema-true.
+    photos = []
+    if comp.get("photo_id"):
+        photos.append({"role": "complainant", "name": comp["name"], "record_id": complainant["ComplainantID"],
+                       "person_id": None, "photo_id": comp["photo_id"]})
+    for row, v in zip(victims, rec["victims"]):
+        if v.get("photo_id"):
+            photos.append({"role": "victim", "name": v["name"], "record_id": row["VictimMasterID"],
+                           "person_id": None, "photo_id": v["photo_id"]})
+    for row, a in zip(accused, rec["accused"]):
+        if a.get("photo_id"):
+            photos.append({"role": "accused", "name": a["name"], "record_id": row["AccusedMasterID"],
+                           "person_id": a["person_id"], "photo_id": a["photo_id"]})
     return {
+        "photos": photos,
         "tables": {"CaseMaster": [case], "ComplainantDetails": [complainant], "Victim": victims,
                    "Accused": accused, "ActSectionAssociation": asa},
         "links": [{"case_id": crime_no, "suspect_id": a["PersonID"], "relationship": RELATIONSHIP}
@@ -466,19 +629,23 @@ def register(payload, ident=None, now=None):
     rec = validate(payload, now)
     _check_jurisdiction(rec, ident)
     with _lock:
+        index = _photo_index()          # loaded before the append, so the new FIR is added once
         bundle = build_rows(rec, now)
         bundle["registered_by"] = (ident or {}).get("user")
         bundle["registered_at"] = now.isoformat(timespec="seconds")
         os.makedirs(os.path.dirname(STORE_PATH) or ".", exist_ok=True)
         with open(STORE_PATH, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(bundle, default=str) + "\n")
+        if bundle["photos"]:
+            index[str(bundle["crime_no"])] = bundle["photos"]
         cache = _cache_getter()
         append_rows(cache, bundle)
         _on_registered(bundle)
     return {"crime_no": bundle["crime_no"], "case_no": bundle["case_no"],
             "case_master_id": bundle["case_master_id"], "district": rec["district"], "station": rec["station"],
             "crime_type": rec["crime_type"], "status": "Under Investigation", "severity": rec["severity"],
-            "linked_accused": len(bundle["links"]), "registered_at": bundle["registered_at"]}
+            "linked_accused": len(bundle["links"]), "photos": len(bundle["photos"]),
+            "registered_at": bundle["registered_at"]}
 
 
 # ------------------------------------------------------------------ routes
@@ -530,3 +697,51 @@ def route_register():
         msg = str(ex)
         return jsonify({"error": "insufficient_permission" if msg == "register_fir" else "outside_jurisdiction",
                         "required": "register_fir", "message": msg}), 403
+
+
+def _require(permission):
+    """The caller's identity, or a 403 body if it lacks `permission` (None when unwired)."""
+    ident = _identity() if _identity else None
+    if ident is not None and permission not in ident.get("permissions", ()):
+        return jsonify({"error": "insufficient_permission", "required": permission}), 403
+    return None
+
+
+@bp.route(f"{API}/fir/photo", methods=["POST", "OPTIONS"])
+@audit.audited("upload_person_photo")
+def route_photo_upload():
+    if request.method == "OPTIONS":
+        return "", 204
+    refused = _require("register_fir")
+    if refused:
+        return refused
+    # Refuse an oversized body before Flask spools it.
+    if (request.content_length or 0) > MAX_PHOTO_BYTES + 64_000:
+        return jsonify({"error": "too_large", "message": f"Photographs are limited to {MAX_PHOTO_BYTES // 1_000_000} MB."}), 413
+    f = request.files.get("photo")
+    data = f.read(MAX_PHOTO_BYTES + 1) if f else b""
+    if not data:
+        return jsonify({"error": "no_photo", "message": "Attach the photograph as the 'photo' field."}), 400
+    try:
+        photo_id, size = save_photo(data)
+    except PhotoError as ex:
+        status = 413 if len(data) > MAX_PHOTO_BYTES else 415
+        return jsonify({"error": "bad_photo", "message": str(ex)}), status
+    return jsonify({"photo_id": photo_id, "bytes": size}), 201
+
+
+@bp.route(f"{API}/fir/photo/<photo_id>", methods=["GET"])
+@audit.audited("read_person_photo", subject_type="photo", subject_arg="photo_id")
+def route_photo(photo_id):
+    refused = _require("view_cases")
+    if refused:
+        return refused
+    claimed = {p["photo_id"] for ps in _photo_index().values() for p in ps}
+    # Only photographs on a registered FIR are served: an upload nobody registered is
+    # not a record, and its id is not a way to read it.
+    if not _PHOTO_ID.match(photo_id or "") or photo_id not in claimed or not os.path.isfile(photo_path(photo_id)):
+        return jsonify({"error": "not_found"}), 404
+    resp = send_file(photo_path(photo_id), mimetype="image/jpeg", max_age=0)
+    resp.headers["Cache-Control"] = "private, no-store"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp

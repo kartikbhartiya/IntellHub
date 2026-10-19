@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Desktop windows too short for the full-height layouts (landing): tighten spacing. */
+@custom-variant short (@media (min-width: 1024px) and (max-height: 920px));
+@custom-variant tight (@media (min-width: 1024px) and (max-height: 760px));
+
 /* ============================================================
    KSP IntelHub — Design System  ·  LIGHT
    "Command-grade" intelligence portal, reimagined as an

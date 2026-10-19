@@ -79,3 +79,5 @@ appsail/copilot_conversations.json
 # Runtime stores written by the app (never commit)
 appsail/registered_firs.jsonl
 appsail/camera_streams.json
+# Photographs of people uploaded with FIR registrations — personal data, never commit.
+appsail/fir_photos/

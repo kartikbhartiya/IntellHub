@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { apiFetchRaw, getJSON } from "@/lib/api";
 import { useIdentity } from "@/lib/session";
+import { PhotoField, type PhotoValue } from "@/components/PersonPhoto";
 
 type Opt = { id: number; name: string };
 type Masters = {
@@ -50,7 +51,18 @@ type Masters = {
   vehicles: string[];
   targets: string[];
 };
-type Person = { name: string; age: string; gender_id: string; person_id?: string; is_police?: boolean; occupation_id?: string; religion_id?: string; caste_id?: string };
+type Person = {
+  name: string;
+  age: string;
+  gender_id: string;
+  person_id?: string;
+  is_police?: boolean;
+  occupation_id?: string;
+  religion_id?: string;
+  caste_id?: string;
+  /** Uploaded already; only photo_id is sent with the registration. */
+  photo?: PhotoValue | null;
+};
 type Hit = { person_id: string; name: string; alias?: string; risk_level?: string; rowdy_sheeter: boolean; active_warrant: boolean };
 
 const STEPS = ["Incident & station", "Offence & sections", "People", "Facts & review"];
@@ -186,7 +198,7 @@ export default function NewFIRPage() {
     setSubmitting(true);
     setErrors({});
     const num = (v: string) => (v === "" ? null : Number(v));
-    const person = (p: Person) => ({ ...p, age: num(p.age), gender_id: num(p.gender_id) });
+    const person = ({ photo, ...p }: Person) => ({ ...p, age: num(p.age), gender_id: num(p.gender_id), photo_id: photo?.photo_id ?? null });
     const body = {
       ...f,
       station_id: num(f.station_id),
@@ -259,7 +271,8 @@ export default function NewFIRPage() {
               </div>
             </div>
             <p className="mt-4 text-[12px] text-faint">
-              Severity {done.severity} · {done.linked_accused} accused linked to the offender registry · registered {done.registered_at}
+              Severity {done.severity} · {done.linked_accused} accused linked to the offender registry
+              {done.photos ? ` · ${done.photos} photograph${done.photos === 1 ? "" : "s"} attached` : ""} · registered {done.registered_at}
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Link prefetch={false} href={`/case?id=${encodeURIComponent(done.crime_no)}`} className="rounded-xl bg-brand px-4 py-2.5 text-[13px] font-semibold text-white">
@@ -342,6 +355,18 @@ export default function NewFIRPage() {
           Victim is a police officer on duty
         </label>
       )}
+      <div className="sm:col-span-3">
+        <span className={label}>Photograph · optional</span>
+        <PhotoField
+          who={key.startsWith("victims") ? "victim" : key.startsWith("accused") ? "accused" : "complainant"}
+          value={p.photo}
+          onChange={(photo) => onChange({ ...p, photo })}
+          error={errors[`${key}.photo_id`]}
+        />
+        {key.startsWith("victims") && (
+          <p className="mt-1 text-[11px] text-faint">Never photograph the victim of a sexual offence — the law bars disclosing their identity.</p>
+        )}
+      </div>
     </div>
   );
 
@@ -512,6 +537,10 @@ export default function NewFIRPage() {
 
           {step === 2 && (
             <>
+              <p className="rounded-xl border border-black/[0.06] bg-black/[0.02] px-3.5 py-2.5 text-[11.5px] leading-relaxed text-muted">
+                Photographs are optional. Attach one only with the person&apos;s consent, or for an arrested accused under the Criminal Procedure
+                (Identification) Act, 2022. Location and camera data are removed before upload, and the photograph is shown only inside the case file.
+              </p>
               <section>
                 <h3 className="mb-2 text-[13px] font-bold text-ink">Complainant / informant</h3>
                 {personRow(complainant, setComplainant, "complainant")}
@@ -656,6 +685,7 @@ export default function NewFIRPage() {
                     ["Complainant", complainant.name || "—"],
                     ["Victims", String(victims.length)],
                     ["Accused", accused.length ? `${accused.length} (${accused.filter((a) => a.person_id).length} from registry)` : "Unknown persons"],
+                    ["Photographs", String([complainant, ...victims, ...accused].filter((x) => x.photo).length)],
                     ["Officer", officers.find((o) => String(o.id) === f.officer_id)?.name],
                   ].map(([k, v]) => (
                     <div key={k} className="flex justify-between gap-3 border-b border-black/[0.04] py-1">

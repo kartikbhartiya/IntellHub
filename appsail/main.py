@@ -1711,6 +1711,8 @@ def get_case_dossier(case_id, jurisdiction=None):
         "arrests": arrest_events,
         "chargesheet": chargesheet_info,
         "ai_suggested_suspects": ai_suggested_suspects,
+        # Photographs taken at registration (FIRs registered through the platform only).
+        "photos": fir_registry.photos_for(case_id),
         "jurisdiction": jurisdiction,
     })
 

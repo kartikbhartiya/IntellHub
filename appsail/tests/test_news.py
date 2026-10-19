@@ -137,13 +137,58 @@ def cache():
     return {"firs": make_firs()}
 
 
+EMPTY_RSS = b'<?xml version="1.0"?><rss version="2.0"><channel><title>empty</title></channel></rss>'
+ALL_SOURCE_URLS = {news.GOOGLE_RSS_URL, news.GDELT_URL, news.BING_RSS_URL, *(u for _n, u in news.PUBLISHER_FEEDS)}
+
+# Bing News RSS as served: the News: namespace URI is the search URL, links go through
+# apiclick with the article in url=, and the thumbnail is an http:// bing.com/th URL.
+BING_RSS = (
+    '<?xml version="1.0" encoding="utf-8" ?><rss version="2.0" '
+    'xmlns:News="https://www.bing.com/news/search?q=Bengaluru+crime&amp;format=rss">'
+    "<channel><title>Bengaluru crime - BingNews</title>"
+    "<item><title>Bengaluru advocate shot dead by tenants after rent dispute</title>"
+    "<link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;tid=x&amp;"
+    "url=https%3a%2f%2fwww.thesouthfirst.com%2fkarnataka%2fadvocate-shot-dead&amp;c=1&amp;mkt=en-in</link>"
+    "<description>A 42-year-old advocate was shot dead at his home in Pattandur Agrahara on Saturday night.</description>"
+    "<pubDate>Sun, 18 Oct 2026 19:37:00 GMT</pubDate><News:Source>The South First</News:Source>"
+    "<News:Image>http://www.bing.com/th?id=ONUT.abc&amp;pid=News</News:Image></item>"
+    "<item><title>A story with no picture</title>"
+    "<link>http://www.bing.com/news/apiclick.aspx?url=https%3a%2f%2fexample.in%2fno-pic</link>"
+    "<pubDate>Sun, 18 Oct 2026 18:00:00 GMT</pubDate><News:Source>Example</News:Source></item>"
+    "</channel></rss>").encode("utf-8")
+
+# A newsroom feed: one police story with media:content, one civic story to be dropped, one
+# police story whose photograph is an <img> in the description (The Times of India), and
+# one police story older than the window.
+PUBLISHER_RSS = (
+    '<?xml version="1.0"?><rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>Karnataka</title>'
+    "<item><title><![CDATA[Ganja worth Rs 12 lakh seized in Mangaluru, two arrested]]></title>"
+    "<link>https://www.thehindu.com/news/national/karnataka/ganja-seized/article1.ece</link>"
+    "<pubDate>Sun, 18 Oct 2026 10:00:00 +0530</pubDate>"
+    '<media:content medium="image" url="http://th-i.thgim.com/ganja.jpg" width="1200"/></item>'
+    "<item><title><![CDATA[Karnataka extends ration card e-KYC deadline to November 10]]></title>"
+    "<link>https://www.thehindu.com/news/national/karnataka/ekyc/article2.ece</link>"
+    "<pubDate>Sun, 18 Oct 2026 09:00:00 +0530</pubDate>"
+    '<media:content medium="image" url="https://th-i.thgim.com/ekyc.jpg"/></item>'
+    "<item><title><![CDATA[Chain snatcher held in Mysuru after CCTV trail]]></title>"
+    '<description>&lt;a href="https://x"&gt;&lt;img border="0" src="https://static.toiimg.com/photo/123.cms" /&gt;&lt;/a&gt;'
+    "Police tracked the accused through footage from three junctions before arresting him.</description>"
+    "<link>https://timesofindia.indiatimes.com/city/mysuru/chain-snatcher/articleshow/3.cms</link>"
+    "<pubDate>Sun, 18 Oct 2026 08:00:00 +0530</pubDate></item>"
+    "<item><title><![CDATA[Old murder case: accused arrested]]></title>"
+    "<link>https://www.thehindu.com/news/old/article4.ece</link>"
+    "<pubDate>Mon, 01 Jun 2026 08:00:00 +0530</pubDate></item>"
+    "</channel></rss>").encode("utf-8")
+
+
 class FakeUpstream:
     """Serves fixture payloads by URL, records every call, and can be told to fail."""
 
     def __init__(self):
         self.calls = []
         self.fail = set()          # source urls that raise
-        self.payloads = {news.GOOGLE_RSS_URL: EN_RSS, news.GDELT_URL: GDELT_JSON}
+        self.payloads = {news.GOOGLE_RSS_URL: EN_RSS, news.GDELT_URL: GDELT_JSON, news.BING_RSS_URL: EMPTY_RSS,
+                         **{url: EMPTY_RSS for _name, url in news.PUBLISHER_FEEDS}}
 
     def __call__(self, url, params=None, headers=None):
         self.calls.append((url, dict(params or {}), dict(headers or {})))
@@ -168,6 +213,7 @@ def upstream(monkeypatch):
     monkeypatch.setattr(news, "_http_get", fake)
     monkeypatch.setattr(news, "_now", lambda: clock["t"])
     monkeypatch.setattr(news, "BACKGROUND_REVALIDATE", False)
+    monkeypatch.setattr(news, "OG_ENRICH", False)        # no article pages fetched from tests
     for env in ("NEWSAPI_KEY", "GNEWS_API_KEY", "NEWS_FETCH"):
         monkeypatch.delenv(env, raising=False)
     fake.clock = clock
@@ -208,6 +254,48 @@ def test_google_rss_parsing_strips_suffix_and_reads_html():
     assert "<" not in digital["summary"]
     mdma = next(i for i in items if "MDMA" in i["title"])
     assert mdma["summary"] is None                # a coverage cluster is other headlines, not a summary
+
+
+def test_bing_rss_unwraps_links_and_carries_https_thumbnails():
+    items = news.parse_bing_rss(BING_RSS)
+    a = next(i for i in items if "advocate" in i["title"])
+    assert a["url"] == "https://www.thesouthfirst.com/karnataka/advocate-shot-dead"      # not bing.com/apiclick
+    assert a["source"] == "The South First" and a["via"] == ["Bing News"]
+    assert a["image"].startswith("https://www.bing.com/th?id=ONUT.abc") and "w=640" in a["image"]
+    assert "Pattandur" in a["summary"]
+    assert next(i for i in items if "no picture" in i["title"])["image"] is None
+
+
+def test_publisher_feeds_keep_only_recent_public_safety_stories_with_their_photos(monkeypatch):
+    monkeypatch.setattr(news, "_now", lambda: T0)
+    items = news.parse_publisher_rss(PUBLISHER_RSS, "The Hindu")
+    titles = [i["title"] for i in items]
+    assert "Karnataka extends ration card e-KYC deadline to November 10" not in titles     # civic news dropped
+    assert "Old murder case: accused arrested" not in titles                              # outside the window
+    ganja = next(i for i in items if "Ganja" in i["title"])
+    assert ganja["image"] == "https://th-i.thgim.com/ganja.jpg" and ganja["category"] == "narcotics"
+    chain = next(i for i in items if "Chain snatcher" in i["title"])
+    assert chain["image"] == "https://static.toiimg.com/photo/123.cms"                    # from the description
+    assert all(i["source"] == "The Hindu" and i["via"] == ["Publishers"] for i in items)
+
+
+def test_a_google_headline_takes_the_photograph_and_link_another_source_carries(cache, upstream):
+    google = (
+        '<?xml version="1.0"?><rss version="2.0"><channel><title>g</title>'
+        "<item><title>Bengaluru advocate shot dead by tenants after rent dispute - The South First</title>"
+        "<link>https://news.google.com/rss/articles/CBMiabc?oc=5</link>"
+        "<pubDate>Sun, 18 Oct 2026 19:40:00 GMT</pubDate>"
+        '<source url="https://www.thesouthfirst.com">The South First</source></item>'
+        "</channel></rss>").encode("utf-8")
+    upstream.payloads[news.GOOGLE_RSS_URL] = google
+    upstream.payloads[news.BING_RSS_URL] = BING_RSS
+    r = news.feed(cache)
+    adv = [i for i in r["items"] if "advocate shot dead" in i["title"].lower()]
+    assert len(adv) == 1                                                   # one card, not two
+    a = adv[0]
+    assert a["url"].startswith("https://www.thesouthfirst.com/")           # the direct link, not Google's redirect
+    assert a["image"] and a["image"].startswith("https://www.bing.com/th")
+    assert set(a["via"]) == {"Bing News", "Google News"}
 
 
 def test_gdelt_parsing_maps_publisher_date_and_image():
@@ -424,8 +512,11 @@ def test_forced_refresh_is_rate_limited(cache, upstream):
 
 
 def test_stale_while_error(cache, upstream):
+    upstream.payloads[news.BING_RSS_URL] = BING_RSS            # every source has last-good items to fall back on
+    for _name, url in news.PUBLISHER_FEEDS:
+        upstream.payloads[url] = PUBLISHER_RSS
     good = news.feed(cache)
-    upstream.fail = {news.GOOGLE_RSS_URL, news.GDELT_URL}
+    upstream.fail = ALL_SOURCE_URLS
     upstream.clock["t"] += news.CACHE_TTL_S + 1
     r = news.feed(cache)
     assert r["stale"] is True and r["status"] == "stale"
@@ -471,14 +562,14 @@ def test_partial_feed_failure_inside_one_source(cache, upstream):
 
 
 def test_all_sources_down_from_the_start(client, upstream):
-    upstream.fail = {news.GOOGLE_RSS_URL, news.GDELT_URL}
+    upstream.fail = ALL_SOURCE_URLS
     r = client.get("/serverless/api/news")
     assert r.status_code == 200
     body = r.get_json()
     assert body["items"] == [] and body["status"] == "unreachable" and body["stale"] is False
     assert body["fetched_at"] is None and body["checked_at"]
     errs = {s["name"]: s.get("error") for s in body["sources"] if s["configured"]}
-    assert set(errs) == {"Google News", "GDELT"} and all(errs.values())
+    assert set(errs) == {"Google News", "Publishers", "Bing News", "GDELT"} and all(errs.values())
     assert body["categories"] == {} and body["districts"] == {}
 
 
@@ -548,7 +639,7 @@ def test_copilot_news_tool_and_composer(cache, upstream):
 
 
 def test_copilot_reports_unreachable_feeds_honestly(cache, upstream):
-    upstream.fail = {news.GOOGLE_RSS_URL, news.GDELT_URL}
+    upstream.fail = ALL_SOURCE_URLS
     res = copilot_engine.run_tool("news", {}, cache)
     assert res["headlines"] == [] and res["status"] == "unreachable"
     text = copilot_engine.compose([(("news", {}), res)])
@@ -575,3 +666,46 @@ def test_planner_leaves_record_questions_alone(cache):
     for q in ("what's happening in Bengaluru", "how many murders in Mysuru"):
         calls = copilot_engine.plan(q, idx, copilot_engine.extract_entities(q, idx))
         assert calls and calls[0][0] != "news"
+
+
+# ---------------------------------------------------------------------------- page images
+def test_og_image_is_read_from_the_page_head():
+    head = ('<head><meta name="description" content="x">'
+            '<meta property="og:image" content="//static.example.in/a/photo.jpg?w=1200&amp;h=630">'
+            '<meta name="twitter:image" content="https://t.example.in/t.jpg"></head>')
+    assert news.og_image_from_head(head, "https://www.example.in/story/1") ==         "https://static.example.in/a/photo.jpg?w=1200&h=630"
+    assert news.og_image_from_head('<meta content="/img/x.png" name="twitter:image:src">', "http://e.in/a/b") ==         "https://e.in/img/x.png"
+    assert news.og_image_from_head("<head><title>no image</title></head>", "https://e.in/") == ""
+
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1/x", "http://localhost:9000/", "http://10.1.2.3/a",
+                                 "http://169.254.169.254/latest/meta-data", "http://[::1]/", "ftp://example.in/a",
+                                 "file:///etc/passwd"])
+def test_page_images_are_never_fetched_from_a_private_address(url):
+    assert news._public_host(url) is False
+
+
+def test_photograph_less_items_take_their_page_image_once(monkeypatch):
+    news.reset()
+    monkeypatch.setattr(news, "OG_ENRICH", True)
+    monkeypatch.setattr(news, "_fetch_enabled", lambda: True)
+    fetched = []
+
+    def fake(url):
+        fetched.append(url)
+        return "https://img.example.in/p.jpg" if "has-photo" in url else ""
+    monkeypatch.setattr(news, "_og_fetch", fake)
+    now = T0
+    mk = lambda u, img=None: news.make_item("Bengaluru police arrest two in chain snatching case", u, "X",
+                                             NOW, image=img, origin="Bing News")
+    items = [mk("https://a.example.in/has-photo"), mk("https://b.example.in/none"),
+             mk("https://news.google.com/rss/articles/CBMi1"), mk("https://c.example.in/x", "https://c.in/i.jpg")]
+    news._attach_page_images(items, now)
+    assert items[0]["image"] == "https://img.example.in/p.jpg" and items[1]["image"] is None
+    assert "https://news.google.com/rss/articles/CBMi1" not in fetched      # Google's redirect is not the article
+    assert "https://c.example.in/x" not in fetched                          # already has its photograph
+    again = [mk("https://a.example.in/has-photo"), mk("https://b.example.in/none")]
+    news._attach_page_images(again, now)
+    assert again[0]["image"] == "https://img.example.in/p.jpg" and len(fetched) == 2   # served from cache
+    news.reset()
+

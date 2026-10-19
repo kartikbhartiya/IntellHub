@@ -2,8 +2,9 @@
 
 /* Karnataka Live News — public police and public-safety headlines beside our own records.
  *
- * Everything on this page comes from GET /news, which aggregates public sources (GDELT,
- * Google News RSS; NewsAPI and GNews when the operator has set keys). The page never
+ * Everything on this page comes from GET /news, which aggregates public sources (the
+ * Karnataka RSS feeds of The Hindu, The Times of India and The Indian Express, Bing News,
+ * GDELT, Google News RSS; NewsAPI and GNews when the operator has set keys). The page never
  * substitutes anything for a feed it could not load: when every source is down it says
  * so, lists what each source answered, and offers a retry. An empty news page is a
  * correct page; a page of invented headlines would be a police screen that lies.

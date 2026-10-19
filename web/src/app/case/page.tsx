@@ -21,6 +21,7 @@ import {
   Map as MapIcon,
 } from "lucide-react";
 import { getJSON } from "@/lib/api";
+import { FirPhoto } from "@/components/PersonPhoto";
 import AccessRequired from "@/components/AccessRequired";
 
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -305,6 +306,20 @@ function CaseDossierContent() {
                       {case_details.fatalities ?? 0} dead · {case_details.injured ?? 0} injured
                     </p>
                   </div>
+                </div>
+              )}
+              {Array.isArray(dossier.photos) && dossier.photos.length > 0 && (
+                <div className="mt-4 border-t border-black/[0.06] pt-3">
+                  <p className="mb-2 text-[11px] text-faint">Photographed at registration</p>
+                  <ul className="flex flex-wrap gap-3">
+                    {dossier.photos.map((ph: { photo_id: string; role: string; name: string; person_id?: string | null }) => (
+                      <li key={ph.photo_id + ph.role + ph.name} className="w-[88px]">
+                        <FirPhoto photoId={ph.photo_id} alt={`${ph.role}: ${ph.name}`} className="h-[88px] w-[88px] rounded-xl border border-black/10" />
+                        <p className="mt-1 truncate text-[11.5px] font-medium text-ink" title={ph.name}>{ph.name || "Unnamed"}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-faint">{ph.role}{ph.person_id ? ` · ${ph.person_id}` : ""}</p>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>

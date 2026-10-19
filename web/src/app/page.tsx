@@ -384,7 +384,7 @@ function DemoTiles({
   if (!tiles.length) return null;
 
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2 short:space-y-1.5">
       {tiles.map(({ id, key, en, icon: Icon, persona }) => {
         const switchable = persona.switchable_district && info.districts.length > 0;
         const district = switchable ? picked ?? persona.district ?? info.districts[0] : persona.district;
@@ -399,7 +399,7 @@ function DemoTiles({
               type="button"
               disabled={!!busy}
               onClick={() => onEnter(persona, switchable ? district ?? undefined : undefined)}
-              className="flex min-h-[48px] min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-1.5 text-left disabled:cursor-wait"
+              className="flex min-h-[48px] min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-1.5 text-left disabled:cursor-wait short:min-h-[42px] short:py-1 tight:min-h-[38px]"
             >
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-soft/12 text-brand-soft ring-1 ring-inset ring-brand-soft/20">
                 {working ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />}
@@ -451,13 +451,33 @@ function DemoTiles({
   );
 }
 
-function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn: () => void; t: T }) {
+type Core = "checking" | "online" | "offline";
+
+/** Whether the intelligence core answered the landing page's own request. Said before
+ *  anyone types a password, so a dead backend is not discovered as a failed sign-in. */
+function CoreStatus({ core, t }: { core: Core; t: T }) {
+  const tone = core === "online" ? "bg-emerald" : core === "offline" ? "bg-crimson" : "bg-brand-soft animate-pulse";
+  const text =
+    core === "online" ? t("landing.coreOnline", "Core online")
+    : core === "offline" ? t("landing.coreOffline", "Core unreachable — sign-in will fail")
+    : t("landing.coreChecking", "Connecting…");
+  return (
+    // On the shortest windows only a problem earns the space; "online" is the expected state.
+    <span role="status" className={`ml-auto inline-flex items-center gap-1.5 text-[11px] font-medium text-white/55 ${core === "online" ? "tight:hidden" : ""}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${tone}`} aria-hidden="true" />
+      {text}
+    </span>
+  );
+}
+
+function SignInCard({ nextPath, onSignedIn, core, t }: { nextPath: string; onSignedIn: () => void; core: Core; t: T }) {
   const { authenticated, loading, error: identityDown } = useIdentity();
   const hasToken = useHasToken();
   const { info: demo } = useDemoInfo();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [reveal, setReveal] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<FormError | null>(null);
   const [lockedFor, setLockedFor] = useState(0);
@@ -535,18 +555,21 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
         className="pointer-events-none absolute -bottom-10 left-1/2 w-[360px] max-w-none -translate-x-1/2 select-none opacity-[0.05] grayscale"
       />
 
-      <div className="relative px-6 pb-7 pt-7 sm:px-9 sm:pb-9 sm:pt-9 lg:px-7 xl:px-9">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-soft/25 bg-brand-soft/10 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.2em] text-brand-soft">
-          <Lock className="h-3 w-3" aria-hidden="true" /> {t("landing.secure", "Secure access")}
-        </span>
-        <h2 id="signin-title" className="text-display mt-4 text-[30px] font-bold leading-tight tracking-tight">
+      <div className="relative px-6 pb-7 pt-7 sm:px-9 sm:pb-9 sm:pt-9 lg:px-7 xl:px-9 short:pb-5 short:pt-5 tight:pb-4 tight:pt-4">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-soft/25 bg-brand-soft/10 px-3 py-1 tight:hidden text-[10.5px] font-semibold uppercase tracking-[0.2em] text-brand-soft">
+            <Lock className="h-3 w-3" aria-hidden="true" /> {t("landing.secure", "Secure access")}
+          </span>
+          <CoreStatus core={core} t={t} />
+        </div>
+        <h2 id="signin-title" className="text-display mt-4 text-[30px] font-bold leading-tight tracking-tight short:mt-2.5 short:text-[26px] tight:mt-0">
           {t("common.signIn", "Sign in")}
         </h2>
         <p className="mt-1.5 text-[13.5px] text-white/60">
           {t("landing.useOfficial", "Use your official @ksp.gov.in address")}
         </p>
         {nextPath && (
-          <p className="mt-2 text-[12px] text-white/45">
+          <p className="mt-2 text-[12px] text-white/45 tight:hidden">
             {t("landing.returnTo", "You will return to")} <code className="rounded bg-white/[0.06] px-1.5 py-0.5 text-white/70">{nextPath}</code>
           </p>
         )}
@@ -561,7 +584,7 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
             </p>
           </div>
         ) : (
-          <form onSubmit={submit} noValidate className="mt-7 space-y-4" aria-describedby={error ? errorId : undefined}>
+          <form onSubmit={submit} noValidate className="mt-7 space-y-4 short:mt-4 short:space-y-3 tight:mt-3 tight:space-y-2.5" aria-describedby={error ? errorId : undefined}>
             <div>
               <label htmlFor={emailId} className="mb-1.5 block text-[12px] font-medium text-white/65">
                 {t("landing.email", "Official email")}
@@ -580,7 +603,7 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@ksp.gov.in"
                 aria-invalid={error?.kind === "invalid" || undefined}
-                className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-[14px] text-white outline-none transition-colors duration-300 placeholder:text-white/30 hover:border-white/20 focus:border-brand-soft/60 focus:bg-white/[0.07]"
+                className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-[14px] short:h-11 tight:h-10 text-white outline-none transition-colors duration-300 placeholder:text-white/30 hover:border-white/20 focus:border-brand-soft/60 focus:bg-white/[0.07]"
               />
             </div>
             <div>
@@ -595,8 +618,11 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => setCapsLock(e.getModifierState?.("CapsLock") ?? false)}
+                  onKeyUp={(e) => setCapsLock(e.getModifierState?.("CapsLock") ?? false)}
+                  onBlur={() => setCapsLock(false)}
                   aria-invalid={error?.kind === "invalid" || undefined}
-                  className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] pl-4 pr-12 text-[14px] text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-brand-soft/60 focus:bg-white/[0.07]"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] pl-4 pr-12 text-[14px] short:h-11 tight:h-10 text-white outline-none transition-colors duration-300 hover:border-white/20 focus:border-brand-soft/60 focus:bg-white/[0.07]"
                 />
                 <button
                   type="button"
@@ -609,6 +635,11 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
                   {reveal ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
                 </button>
               </div>
+              {capsLock && (
+                <p role="status" className="mt-1.5 text-[11.5px] font-medium text-brand-soft">
+                  {t("landing.capsLock", "Caps Lock is on")}
+                </p>
+              )}
             </div>
 
             {error && (
@@ -638,7 +669,7 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
             <button
               type="submit"
               disabled={!!busy || lockedFor > 0 || !email.trim() || !password}
-              className="group flex h-12 w-full items-center justify-between rounded-full bg-gradient-to-b from-brand-soft to-brand pl-6 pr-1.5 text-[14px] font-semibold text-black shadow-[0_12px_30px_-10px_rgba(231,180,60,0.6)] transition-[filter,transform,opacity] duration-300 hover:brightness-105 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-45"
+              className="group flex h-12 w-full items-center justify-between rounded-full short:h-11 tight:h-10 bg-gradient-to-b from-brand-soft to-brand pl-6 pr-1.5 text-[14px] font-semibold text-black shadow-[0_12px_30px_-10px_rgba(231,180,60,0.6)] transition-[filter,transform,opacity] duration-300 hover:brightness-105 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {busy === "password" ? t("landing.signingIn", "Signing in…") : t("common.signIn", "Sign in")}
               <span className="grid h-9 w-9 place-items-center rounded-full bg-black/10 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-px">
@@ -655,8 +686,8 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
         )}
 
         {!restoring && demo && demo.personas.length > 0 && (
-          <div className="mt-7">
-            <div className="mb-3 flex items-center gap-3">
+          <div className="mt-7 short:mt-4 tight:mt-3">
+            <div className="mb-3 flex items-center gap-3 short:mb-2">
               <span className="h-px flex-1 bg-white/10" />
               <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/45">
                 {t("landing.explore", "Or explore without an account")}
@@ -674,14 +705,14 @@ function SignInCard({ nextPath, onSignedIn, t }: { nextPath: string; onSignedIn:
           <Link
             prefetch={false}
             href="/overview"
-            className="group mt-6 inline-flex items-center gap-1.5 text-[13px] font-medium text-white/70 transition-colors hover:text-brand-soft"
+            className="group mt-6 inline-flex items-center gap-1.5 text-[13px] font-medium short:mt-3.5 tight:mt-2.5 text-white/70 transition-colors hover:text-brand-soft"
           >
             {t("landing.analyst", "Continue as analyst (aggregates only)")}
             <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" aria-hidden="true" />
           </Link>
         )}
 
-        <p className="mt-8 border-t border-white/[0.07] pt-4 text-[11px] leading-relaxed text-white/35">
+        <p className="mt-8 border-t border-white/[0.07] pt-4 text-[11px] leading-relaxed text-white/35 short:mt-4 short:pt-3 tight:hidden">
           {t("landing.audited", "Every sign-in attempt, successful or not, is written to the audit log.")}
         </p>
       </div>
@@ -732,15 +763,18 @@ export default function Landing() {
   return (
     // No background of its own: the layout's fixed field and grid show through, so
     // the front door reads as the same building as the rooms behind it.
-    <div className="relative min-h-[100dvh] overflow-x-hidden">
+    // On desktop the front door is exactly one screen: nothing scrolls. Phones stack the
+    // hero over the card and scroll as usual.
+    <div className="relative min-h-[100dvh] overflow-x-hidden lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
       {/* Airy light field behind the hero: warm at the crest, cool at the far edge. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_45%_at_12%_8%,rgba(231,180,60,0.16),transparent_70%),radial-gradient(40%_40%_at_70%_85%,rgba(47,116,192,0.08),transparent_70%)]" />
 
-      <div className="relative mx-auto grid min-h-[100dvh] w-full max-w-[1500px] grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(400px,0.8fr)]">
+      <div className="relative mx-auto grid min-h-[100dvh] w-full max-w-[1500px] grid-cols-1 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1.2fr)_minmax(400px,0.8fr)]">
         {/* --------------------------------------------------------------- hero */}
-        <div className="relative flex flex-col px-4 pb-8 pt-6 sm:px-8 md:min-h-[600px] md:pb-10 md:pt-8 lg:min-h-[100dvh] lg:px-12 lg:pb-12 xl:px-16">
+        <div className="relative flex flex-col px-4 pb-8 pt-6 sm:px-8 md:min-h-[600px] md:pb-10 md:pt-8 lg:h-full lg:min-h-0 lg:px-12 lg:pb-10 xl:px-16 short:pb-6 short:pt-5">
           {wide && (
-            <div aria-hidden={!mapReady} className="pointer-events-none absolute bottom-[10%] right-0 top-[12%] w-[52%] max-w-[520px] lg:right-[-4%] lg:w-[60%] [&_path]:pointer-events-auto">
+            // Faded toward the text column, so the headline and the figures never sit on map lines.
+            <div aria-hidden={!mapReady} className="pointer-events-none absolute bottom-[10%] right-0 top-[12%] w-[52%] max-w-[520px] lg:right-[-4%] lg:w-[60%] [&_path]:pointer-events-auto [mask-image:linear-gradient(to_right,transparent_0%,transparent_14%,rgba(0,0,0,0.3)_30%,black_56%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,transparent_14%,rgba(0,0,0,0.3)_30%,black_56%)]">
               <KarnatakaMap alertDistricts={alertDistricts} onReady={onMapReady} t={t} />
             </div>
           )}
@@ -784,7 +818,7 @@ export default function Landing() {
             </div>
           </header>
 
-          <div className="relative z-10 mt-10 max-w-[600px] md:my-auto md:pt-14 lg:pt-10">
+          <div className="relative z-10 mt-10 max-w-[600px] md:my-auto md:pt-14 lg:pt-10 short:pt-4">
             <motion.span
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -798,7 +832,7 @@ export default function Landing() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.9, delay: 0.05, ease: EASE }}
-              className="text-display mt-5 text-[44px] font-bold leading-[0.95] tracking-[-0.035em] text-ink sm:text-[60px] lg:text-[72px] xl:text-[80px]"
+              className="text-display mt-5 text-[44px] font-bold leading-[0.95] tracking-[-0.035em] text-ink sm:text-[60px] lg:text-[72px] xl:text-[80px] short:mt-4 short:text-[64px]"
             >
               KSP{" "}
               <span className="bg-gradient-to-br from-brand-soft via-brand to-brand-deep bg-clip-text text-transparent">IntelHub</span>
@@ -815,7 +849,7 @@ export default function Landing() {
               )}
             </motion.p>
 
-            <div className="mt-9 sm:mt-11">
+            <div className="mt-9 sm:mt-11 short:mt-7">
               <LiveFigures stats={stats} failed={statsFailed} t={t} />
             </div>
           </div>
@@ -846,14 +880,16 @@ export default function Landing() {
         </div>
 
         {/* ---------------------------------------------------------- sign-in */}
-        <div className="relative flex items-start justify-center px-4 pb-10 sm:px-8 lg:items-center lg:py-10 lg:pl-0 lg:pr-10 xl:pr-14">
+        <div className="no-scrollbar relative flex items-start justify-center px-4 pb-10 sm:px-8 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:py-8 lg:pl-0 lg:pr-10 xl:pr-14 short:py-3 tight:py-1">
+          {/* my-auto rather than items-center: it centres, but never pushes the top of an
+              overflowing card out of reach. */}
           <motion.div
             initial={{ opacity: 0, y: 24, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.9, delay: 0.1, ease: EASE }}
-            className="w-full max-w-[460px] rounded-[2rem] bg-black/[0.035] p-1.5 ring-1 ring-black/[0.05]"
+            className="w-full max-w-[460px] rounded-[2rem] bg-black/[0.035] p-1.5 ring-1 ring-black/[0.05] lg:my-auto"
           >
-            <SignInCard nextPath={nextPath} onSignedIn={go} t={t} />
+            <SignInCard nextPath={nextPath} onSignedIn={go} core={stats ? "online" : statsFailed ? "offline" : "checking"} t={t} />
           </motion.div>
         </div>
       </div>

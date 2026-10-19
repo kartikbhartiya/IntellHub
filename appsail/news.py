@@ -11,9 +11,14 @@ the record side by side.
 
 What it does
 ------------
-* Pulls from public aggregators concurrently, each call with a short timeout:
+* Pulls from public sources concurrently, each call with a short timeout: the RSS
+  feeds Karnataka desks of The Hindu, The Times of India and The Indian Express publish
+  (kept only where a story is police or public-safety news), Bing News RSS searches,
   GDELT DOC 2.0 (an open index of world news), Google News RSS search feeds in English
-  and Kannada, and — only when an operator has set a key — NewsAPI and GNews.
+  and Kannada, and — only when an operator has set a key — NewsAPI and GNews. The
+  publisher and Bing feeds carry the article's photograph and a direct link; Google's
+  RSS carries neither, so a Google headline that another source also carries takes its
+  photograph from there.
 * Normalises every item to one shape, de-duplicates by canonical URL and by normalised
   headline, and tags it with categories, Karnataka districts and the corpus's crime
   types using the keyword rules below.
@@ -101,14 +106,43 @@ NOTE = ("Headlines come from public news sources and aggregators. They are not v
         "own (simulated, CCTNS-shaped) records for that district, not the incident in the article.")
 
 GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
+BING_RSS_URL = "https://www.bing.com/news/search"
 GOOGLE_RSS_URL = "https://news.google.com/rss/search"
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
 GNEWS_URL = "https://gnews.io/api/v4/search"
 
-SOURCE_ORDER = ("Google News", "GDELT", "NewsAPI", "GNews")
-# Merge precedence when two sources carry the same story: the one with a description
-# and an image first, Google's headline-only RSS last.
-MERGE_ORDER = ("NewsAPI", "GNews", "GDELT", "Google News")
+SOURCE_ORDER = ("Google News", "Publishers", "Bing News", "GDELT", "NewsAPI", "GNews")
+# Merge precedence when two sources carry the same story: the one with a description,
+# a photograph and a direct link first, Google's headline-only RSS last.
+MERGE_ORDER = ("Publishers", "Bing News", "NewsAPI", "GNews", "GDELT", "Google News")
+
+# Newsroom RSS feeds for Karnataka. They carry every story the desk files (rain alerts,
+# politics, civic news), so an item is kept only when the category rules below find it
+# is police or public-safety news.
+PUBLISHER_FEEDS = [
+    ("The Hindu", "https://www.thehindu.com/news/national/karnataka/feeder/default.rss"),
+    ("The Hindu", "https://www.thehindu.com/news/cities/bangalore/feeder/default.rss"),
+    ("The Hindu", "https://www.thehindu.com/news/cities/Mangalore/feeder/default.rss"),
+    ("The Times of India", "https://timesofindia.indiatimes.com/rssfeeds/-2128833038.cms"),
+    ("The Times of India", "https://timesofindia.indiatimes.com/rssfeeds/3942695.cms"),
+    ("The Times of India", "https://timesofindia.indiatimes.com/rssfeeds/3942693.cms"),
+    ("The Times of India", "https://timesofindia.indiatimes.com/rssfeeds/3942690.cms"),
+    ("The Indian Express", "https://indianexpress.com/section/cities/bangalore/feed/"),
+]
+# Bing's market is English-only here; each query returns its dozen newest stories. The
+# same searches as Google's English feed, so the two overlap and Google's headline-only
+# items find their photograph and direct link in Bing's copy.
+BING_QUERIES = None    # set to GOOGLE_QUERIES["en"] below, once that is defined
+
+# A story whose page we can read but whose feed carried no photograph: the page's own
+# og:image / twitter:image. Bounded per round and cached per article, and never pointed at
+# a private address — the URLs come from third-party feeds.
+OG_ENRICH = True
+OG_MAX_PER_ROUND = 24
+OG_TIMEOUT = (3.0, 4.0)
+OG_MAX_BYTES = 300_000
+OG_CACHE_MAX = 5000
+_MEDIA_NS = "{http://search.yahoo.com/mrss/}"
 
 GDELT_QUERY = {
     # GDELT requires OR-lists in parentheses; two lists are ANDed.
@@ -128,6 +162,7 @@ GOOGLE_QUERIES = {
     "kn": ["ಕರ್ನಾಟಕ ಪೊಲೀಸ್", "ಬೆಂಗಳೂರು ಪೊಲೀಸ್", "ಬೆಂಗಳೂರು ಅಪರಾಧ", "ಸೈಬರ್ ವಂಚನೆ", "ಮೈಸೂರು ಪೊಲೀಸ್",
            "ಮಂಗಳೂರು ಪೊಲೀಸ್", "ಹುಬ್ಬಳ್ಳಿ ಪೊಲೀಸ್", "ಬೆಳಗಾವಿ ಪೊಲೀಸ್", "ಕಲಬುರಗಿ ಪೊಲೀಸ್", "ಗಾಂಜಾ ಬಂಧನ"],
 }
+BING_QUERIES = list(GOOGLE_QUERIES["en"])
 GOOGLE_EDITION = {"en": {"hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
                   "kn": {"hl": "kn", "gl": "IN", "ceid": "IN:kn"}}
 
@@ -481,6 +516,14 @@ def _http_url(u):
     return u if re.match(r"^https?://[^\s]+$", u, re.I) else None
 
 
+def _https_image(u):
+    """An image URL the page can load: the deployed client is served over HTTPS, where a
+    browser blocks http:// images outright. Image hosts serve both; a rare one that does
+    not falls back to the category art in the page."""
+    u = _http_url(u)
+    return "https://" + u[7:] if u and u.lower().startswith("http://") else u
+
+
 # What an outlet's name looks like when a page title carries it as a suffix. Deliberately
 # narrow: "Cops bust drug racket - India's biggest haul" must keep its tail.
 _BRANDISH = re.compile(r"\bnews\b|\btimes\b|express|herald|\bhindu\b|india today|ndtv|\btv\s?\d*\b|mirror|"
@@ -595,7 +638,7 @@ def make_item(title, url, source, published, summary=None, image=None, origin=No
         "url": url,
         "source": source or _publisher(_domain(url)) or origin,
         "published": _iso(published),
-        "image": _http_url(image),
+        "image": _https_image(image),
         "lang": "kn" if KANNADA.search(title) else "en",
         "category": cats[0] if cats else "general",
         "categories": cats or ["general"],
@@ -658,6 +701,69 @@ def parse_google_rss(payload, origin="Google News"):
         item = make_item(title, it.findtext("link"), source, _parse_rfc822(it.findtext("pubDate")),
                          summary=_summary(it.findtext("description"), title, source), origin=origin)
         if item:
+            out.append(item)
+    return out
+
+
+def _local(tag):
+    return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+
+
+def parse_bing_rss(payload):
+    """Bing News RSS. Its News: namespace URI is the search URL itself, so elements are
+    matched by local name. Links go through bing.com/news/apiclick with the article in
+    the url= parameter; the thumbnail takes w/h parameters (News:ImageSize)."""
+    root = _xml(payload)
+    out = []
+    for it in root.iter("item"):
+        f = {}
+        for ch in it:
+            f.setdefault(_local(ch.tag), (ch.text or "").strip())
+        link = f.get("link", "")
+        target = urllib.parse.parse_qs(urllib.parse.urlsplit(link).query).get("url")
+        url = target[0] if target else link
+        image = f.get("Image") or None
+        if image:
+            image += ("&" if "?" in image else "?") + "w=640&h=360&c=14"
+        source = f.get("Source") or None
+        title = clean_title(f.get("title", ""), source)
+        item = make_item(title, url, source, _parse_rfc822(f.get("pubDate")),
+                         summary=_summary(f.get("description"), title, source), image=image, origin="Bing News")
+        if item:
+            out.append(item)
+    return out
+
+
+def _rss_image(it, description):
+    """The photograph an RSS item carries: media:content / media:thumbnail, an image
+    enclosure, or the first <img> in the description (The Times of India's style)."""
+    for el in it.iter():
+        url = el.get("url")
+        if not url:
+            continue
+        if el.tag in (_MEDIA_NS + "content", _MEDIA_NS + "thumbnail") and el.get("medium", "image") == "image":
+            return url
+        if el.tag == "enclosure" and (el.get("type") or "image/").startswith("image/"):
+            return url
+    m = re.search(r"<img[^>]+src=[\"']([^\"']+)", description or "", re.I)
+    return html.unescape(m.group(1)) if m else None
+
+
+def parse_publisher_rss(payload, publisher):
+    """A newsroom's own RSS feed: keeps police and public-safety stories from the last
+    MAX_AGE_DAYS, drops the rest of the desk's output."""
+    root = _xml(payload)
+    cutoff = _now() - MAX_AGE_DAYS * 86400
+    out = []
+    for it in root.iter("item"):
+        desc = it.findtext("description") or ""
+        title = clean_title(it.findtext("title") or "", publisher)
+        published = _parse_rfc822(it.findtext("pubDate"))
+        if published and published.timestamp() < cutoff:
+            continue
+        item = make_item(title, (it.findtext("link") or "").strip(), publisher, published,
+                         summary=_summary(desc, title, publisher), image=_rss_image(it, desc), origin="Publishers")
+        if item and item["category"] != "general":
             out.append(item)
     return out
 
@@ -747,6 +853,99 @@ def _http_get(url, params=None, headers=None):
         raise FetchError(type(e).__name__)
 
 
+_OG = {}          # canonical article URL -> image URL, or "" when the page has none
+_OG_META = re.compile(r"<meta\b[^>]*>", re.I)
+_OG_KEY = re.compile(r"""(?:property|name)\s*=\s*["'](?:og:image(?::secure_url|:url)?|twitter:image(?::src)?)["']""", re.I)
+_OG_CONTENT = re.compile(r"""content\s*=\s*["']([^"']+)["']""", re.I)
+
+
+def _public_host(url):
+    """True when url's host resolves only to public addresses (no loopback, private,
+    link-local or reserved ranges): feed URLs must not become a way into the network."""
+    import ipaddress
+    import socket
+    try:
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            return False
+        infos = socket.getaddrinfo(parts.hostname, parts.port or (443 if parts.scheme == "https" else 80),
+                                   proto=socket.IPPROTO_TCP)
+        return bool(infos) and all(ipaddress.ip_address(i[4][0].split("%")[0]).is_global for i in infos)
+    except (OSError, ValueError):
+        return False
+
+
+def _og_fetch(url):
+    """The og:image of an article page, '' when it has none. Reads the head only."""
+    import requests
+
+    for _hop in range(4):
+        if not _public_host(url):
+            return ""
+        with requests.get(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html"}, timeout=OG_TIMEOUT,
+                          stream=True, allow_redirects=False) as r:
+            if r.is_redirect and r.headers.get("location"):
+                url = urllib.parse.urljoin(url, r.headers["location"])
+                continue
+            if r.status_code != 200 or "html" not in r.headers.get("content-type", "html"):
+                return ""
+            buf = b""
+            for chunk in r.iter_content(16384):
+                buf += chunk
+                if len(buf) > OG_MAX_BYTES or b"</head>" in buf.lower():
+                    break
+        return og_image_from_head(buf.decode("utf-8", "replace"), url)
+    return ""
+
+
+def og_image_from_head(head, base_url):
+    """The og:image (or twitter:image) a page head declares, absolute and https; '' if none."""
+    for tag in _OG_META.findall(head or ""):
+        if _OG_KEY.search(tag):
+            m = _OG_CONTENT.search(tag)
+            if m:
+                return _https_image(urllib.parse.urljoin(base_url, html.unescape(m.group(1).strip()))) or ""
+    return ""
+
+
+def _attach_page_images(items, now):
+    """Give photograph-less items the image their own page declares: cached ones at once,
+    the top OG_MAX_PER_ROUND unknown ones fetched concurrently within the round deadline.
+    Google's redirect links are skipped — they are not the article."""
+    if not OG_ENRICH:
+        return
+    todo = []
+    for it in sorted(items, key=lambda x: _rank_key(x, now)):
+        if it.get("image"):
+            continue
+        hit = _OG.get(it["_canon"])
+        if hit:
+            it["image"] = hit
+        elif hit is None and "news.google.com" not in it["url"] and len(todo) < OG_MAX_PER_ROUND:
+            todo.append(it)
+    if not todo or not _fetch_enabled():
+        return
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="news-og")
+    futs = {ex.submit(_og_fetch, it["url"]): it for it in todo}
+    try:
+        for f in concurrent.futures.as_completed(futs, timeout=ROUND_DEADLINE_S):
+            it = futs[f]
+            try:
+                img = f.result()
+            except Exception:       # a page that will not load is a page without a photograph
+                img = ""
+            _OG[it["_canon"]] = img
+            if img:
+                it["image"] = img
+    except concurrent.futures.TimeoutError:
+        pass                        # the slow ones are tried again next round
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    if len(_OG) > OG_CACHE_MAX:
+        for k in list(_OG)[: len(_OG) - OG_CACHE_MAX]:
+            del _OG[k]
+
+
 def _fetch_enabled():
     return os.environ.get("NEWS_FETCH", "on").strip().lower() not in ("off", "0", "false", "no", "disabled")
 
@@ -769,6 +968,21 @@ def _source_plan(lang):
 
     plan = {"Google News": ([(q, google(q)) for q in GOOGLE_QUERIES[lang]], None),
             "GDELT": ([("artlist", gdelt)], None)}
+
+    if lang != "en":
+        plan["Publishers"] = ([], "English-language newsroom feeds")
+        plan["Bing News"] = ([], "no Kannada edition")
+    else:
+        def publisher(name, url):
+            return lambda: parse_publisher_rss(_http_get(url), name)
+
+        def bing(q):
+            params = {"q": q, "format": "rss", "mkt": "en-IN"}
+            return lambda: parse_bing_rss(_http_get(BING_RSS_URL, params=params))
+
+        plan["Publishers"] = ([(f"{name} {i}", publisher(name, url)) for i, (name, url) in enumerate(PUBLISHER_FEEDS)],
+                              None)
+        plan["Bing News"] = ([(q, bing(q)) for q in BING_QUERIES], None)
 
     key = os.environ.get("NEWSAPI_KEY", "").strip()
     if lang != "en":
@@ -818,8 +1032,9 @@ def _now():
 
 
 def reset():
-    """Forget every snapshot (tests; an operator rotating keys)."""
+    """Forget every snapshot and every looked-up page image (tests; an operator rotating keys)."""
     _SNAP.clear()
+    _OG.clear()
 
 
 def _due(entry, now, force):
@@ -919,8 +1134,9 @@ def _refresh(lang, force=False):
                             "attempt_at": now, "ok_at": old.get("ok_at"), "stale": bool(keep)}
             LOG.info("news source %s unreachable (%s)%s", src, err, "; serving last good items" if keep else "")
     ordered = [entries[s] for s in MERGE_ORDER if s in entries]
-    snap = {"lang": lang, "sources": entries, "items": _merge([e["items"] for e in ordered]),
-            "built_at": now}
+    items = _merge([e["items"] for e in ordered])
+    _attach_page_images(items, now)
+    snap = {"lang": lang, "sources": entries, "items": items, "built_at": now}
     _SNAP[lang] = snap
     return snap
 
@@ -1049,11 +1265,13 @@ def _age_hours(item, now):
 
 def _rank_key(item, now):
     """Karnataka-specific and recent first. A Karnataka headline from yesterday outranks an
-    out-of-state one from this morning; within Karnataka, newer wins. Undated items last."""
+    out-of-state one from this morning; within Karnataka, newer wins, and a story that
+    comes with its photograph is worth a few hours over a bare headline. Undated last."""
     age = _age_hours(item, now)
     if age is None:
         return (1, 0.0)
-    score = max(age, 0.0) - (24.0 if item.get("karnataka") else 0.0) - (6.0 if item["category"] != "general" else 0.0)
+    score = (max(age, 0.0) - (24.0 if item.get("karnataka") else 0.0)
+             - (6.0 if item["category"] != "general" else 0.0) - (4.0 if item.get("image") else 0.0))
     return (0, score)
 
 
